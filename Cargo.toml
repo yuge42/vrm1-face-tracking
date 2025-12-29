@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yuge42/rs-template"
+readme = "README.md"
+authors = ["Your Name <you@example.com>"]
+description = "Template workspace for Rust projects"
+
+[workspace.dependencies]
+# Add shared dependencies here to keep versions aligned across members.
