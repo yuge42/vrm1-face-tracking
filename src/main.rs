@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use tracker_ipc::{spawn_tracker, TrackerFrame};
+use tracker_ipc::{TrackerFrame, spawn_tracker};
 
 #[derive(Resource)]
 struct TrackerReceiver {
@@ -40,11 +40,7 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
             .copied()
             .unwrap_or(0.0);
 
-        let jaw = frame
-            .blendshapes
-            .get("jawOpen")
-            .copied()
-            .unwrap_or(0.0);
+        let jaw = frame.blendshapes.get("jawOpen").copied().unwrap_or(0.0);
 
         println!(
             "ts={:.3} blinkL={:.2} jawOpen={:.2}",

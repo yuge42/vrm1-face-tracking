@@ -15,10 +15,7 @@ pub struct TrackerFrame {
 }
 
 /// Run Python process and return a Receiver
-pub fn spawn_tracker(
-    python: &str,
-    script_path: &str,
-) -> (Child, Receiver<TrackerFrame>) {
+pub fn spawn_tracker(python: &str, script_path: &str) -> (Child, Receiver<TrackerFrame>) {
     let mut child = Command::new(python)
         .arg(script_path)
         .stdout(Stdio::piped())
@@ -34,10 +31,7 @@ pub fn spawn_tracker(
     (child, rx)
 }
 
-fn spawn_stdout_reader(
-    stdout: std::process::ChildStdout,
-    tx: Sender<TrackerFrame>,
-) {
+fn spawn_stdout_reader(stdout: std::process::ChildStdout, tx: Sender<TrackerFrame>) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
