@@ -1,16 +1,35 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
-default-members = ["crates/*"]
+members = ["crates/*", "."]
+default-members = ["."]
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yuge42/rs-template"
+repository = "https://github.com/yuge42/vrm1-face-tracking"
 readme = "README.md"
-authors = ["Your Name <you@example.com>"]
-description = "Template workspace for Rust projects"
+authors = ["Asayu Yuge <243070221+yuge42@users.noreply.github.com>"]
+description = "Face Tracking adapter for VRM models"
 
 [workspace.dependencies]
-# Add shared dependencies here to keep versions aligned across members.
+bevy = "0.17"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+crossbeam-channel = "0.5"
+
+[package]
+name = "vrm1-face-tracking"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+tracker_ipc = { path = "crates/tracker_ipc" }
+bevy = { workspace = true }
+crossbeam-channel = { workspace = true }
