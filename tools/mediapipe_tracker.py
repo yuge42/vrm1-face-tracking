@@ -1,6 +1,7 @@
 import json
 import time
 import sys
+import os
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -14,6 +15,13 @@ MODEL_PATH = "tools/face_landmarker.task"
 MAX_FRAME_FAILURES = 30
 
 def main():
+    # Check if model file exists
+    if not os.path.exists(MODEL_PATH):
+        print(json.dumps({
+            "error": f"Model file not found at {MODEL_PATH}. Please download it from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+        }), file=sys.stderr, flush=True)
+        sys.exit(1)
+    
     # Initialize MediaPipe Face Landmarker
     base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
     options = vision.FaceLandmarkerOptions(
@@ -28,7 +36,9 @@ def main():
     # Open webcam
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print(json.dumps({"error": "Failed to open webcam"}), file=sys.stderr, flush=True)
+        print(json.dumps({
+            "error": "Failed to open webcam (device index 0). Please check that a webcam is connected and accessible."
+        }), file=sys.stderr, flush=True)
         sys.exit(1)
     
     frame_count = 0
@@ -40,7 +50,9 @@ def main():
             if not success:
                 consecutive_failures += 1
                 if consecutive_failures >= MAX_FRAME_FAILURES:
-                    print(json.dumps({"error": f"Failed to read {MAX_FRAME_FAILURES} consecutive frames, exiting"}), file=sys.stderr, flush=True)
+                    print(json.dumps({
+                        "error": f"Failed to read {MAX_FRAME_FAILURES} consecutive frames. Possible causes: webcam disconnected, permission denied, or device error."
+                    }), file=sys.stderr, flush=True)
                     sys.exit(1)
                 continue
             
