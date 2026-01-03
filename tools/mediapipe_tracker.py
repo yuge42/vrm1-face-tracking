@@ -10,6 +10,9 @@ from mediapipe.tasks.python import vision
 # Download from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 MODEL_PATH = "tools/face_landmarker.task"
 
+# Maximum consecutive frame read failures before exiting
+MAX_FRAME_FAILURES = 30
+
 def main():
     # Initialize MediaPipe Face Landmarker
     base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
@@ -29,13 +32,20 @@ def main():
         sys.exit(1)
     
     frame_count = 0
+    consecutive_failures = 0
     
     try:
         while True:
             success, frame = cap.read()
             if not success:
-                print(json.dumps({"error": "Failed to read frame"}), file=sys.stderr, flush=True)
+                consecutive_failures += 1
+                if consecutive_failures >= MAX_FRAME_FAILURES:
+                    print(json.dumps({"error": f"Failed to read {MAX_FRAME_FAILURES} consecutive frames, exiting"}), file=sys.stderr, flush=True)
+                    sys.exit(1)
                 continue
+            
+            # Reset failure counter on successful read
+            consecutive_failures = 0
             
             # Convert BGR to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -43,8 +53,9 @@ def main():
             # Create MediaPipe Image
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
             
-            # Calculate timestamp in milliseconds
-            timestamp_ms = int(time.time() * 1000)
+            # Use frame count as timestamp to ensure monotonically increasing values
+            # MediaPipe VIDEO mode requires timestamps in milliseconds
+            timestamp_ms = frame_count
             
             # Detect face landmarks and blendshapes
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
