@@ -20,8 +20,8 @@ source .venv/bin/activate
 ### 2. Install Python Dependencies
 
 ```bash
-cd tools
-pip install -r requirements.txt
+# From the project root
+pip install -r tools/requirements.txt
 ```
 
 ### 3. Download the MediaPipe Model
@@ -29,7 +29,10 @@ pip install -r requirements.txt
 Download the face landmarker model with blendshapes support:
 
 ```bash
+# From the project root
+cd tools
 wget -O face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+cd ..
 ```
 
 Or download manually from:
@@ -42,9 +45,9 @@ The tracker is automatically started by the Rust application. It outputs face bl
 To test the tracker manually:
 
 ```bash
-# Make sure virtual environment is activated
-source ../.venv/bin/activate  # or .venv\Scripts\activate on Windows
-python mediapipe_tracker.py
+# From the project root, make sure virtual environment is activated
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+python tools/mediapipe_tracker.py
 ```
 
 Make sure you have a webcam connected and the model file downloaded.
