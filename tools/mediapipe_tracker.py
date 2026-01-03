@@ -1,19 +1,75 @@
 import json
 import time
 import sys
+import cv2
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 
-i = 0
+# Path to the MediaPipe model file
+# Download from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+MODEL_PATH = "tools/face_landmarker.task"
 
-while True:
-    frame = {
-        "ts": time.time(),
-        "blendshapes": {
-            "eyeBlinkLeft": (i % 100) / 100.0,
-            "eyeBlinkRight": (i % 80) / 80.0,
-            "jawOpen": 0.3,
-        }
-    }
+def main():
+    # Initialize MediaPipe Face Landmarker
+    base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+    options = vision.FaceLandmarkerOptions(
+        base_options=base_options,
+        output_face_blendshapes=True,
+        running_mode=vision.RunningMode.VIDEO,
+        num_faces=1
+    )
+    
+    landmarker = vision.FaceLandmarker.create_from_options(options)
+    
+    # Open webcam
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print(json.dumps({"error": "Failed to open webcam"}), file=sys.stderr, flush=True)
+        sys.exit(1)
+    
+    frame_count = 0
+    
+    try:
+        while True:
+            success, frame = cap.read()
+            if not success:
+                print(json.dumps({"error": "Failed to read frame"}), file=sys.stderr, flush=True)
+                continue
+            
+            # Convert BGR to RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Create MediaPipe Image
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            
+            # Calculate timestamp in milliseconds
+            timestamp_ms = int(time.time() * 1000)
+            
+            # Detect face landmarks and blendshapes
+            result = landmarker.detect_for_video(mp_image, timestamp_ms)
+            
+            # Extract blendshapes
+            blendshapes = {}
+            if result.face_blendshapes and len(result.face_blendshapes) > 0:
+                for blendshape in result.face_blendshapes[0]:
+                    blendshapes[blendshape.category_name] = blendshape.score
+            
+            # Output frame data in the expected format
+            output = {
+                "ts": time.time(),
+                "blendshapes": blendshapes
+            }
+            
+            print(json.dumps(output), flush=True)
+            
+            frame_count += 1
+            
+    except KeyboardInterrupt:
+        pass
+    finally:
+        cap.release()
+        landmarker.close()
 
-    print(json.dumps(frame), flush=True)
-    i += 1
-    time.sleep(0.1)  # 10 FPS
+if __name__ == "__main__":
+    main()
