@@ -4,19 +4,31 @@ This directory contains the Python face tracking implementation using MediaPipe 
 
 ## Setup
 
-### 1. Install Python Dependencies
+### 1. Create Virtual Environment (Recommended)
+
+```bash
+# From the project root
+python3 -m venv .venv
+
+# Activate virtual environment
+# On Linux/macOS:
+source .venv/bin/activate
+# On Windows:
+# .venv\Scripts\activate
+```
+
+### 2. Install Python Dependencies
 
 ```bash
 cd tools
 pip install -r requirements.txt
 ```
 
-### 2. Download the MediaPipe Model
+### 3. Download the MediaPipe Model
 
 Download the face landmarker model with blendshapes support:
 
 ```bash
-cd tools
 wget -O face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 ```
 
@@ -30,8 +42,9 @@ The tracker is automatically started by the Rust application. It outputs face bl
 To test the tracker manually:
 
 ```bash
-cd tools
-python3 mediapipe_tracker.py
+# Make sure virtual environment is activated
+source ../.venv/bin/activate  # or .venv\Scripts\activate on Windows
+python mediapipe_tracker.py
 ```
 
 Make sure you have a webcam connected and the model file downloaded.
