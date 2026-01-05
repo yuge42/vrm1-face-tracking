@@ -23,7 +23,7 @@ fn main() {
 fn setup_tracker(mut commands: Commands) {
     // Use PYTHON_BIN environment variable if set, otherwise default to "python3"
     let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
-    
+
     let (child, rx) = spawn_tracker(
         &python_bin,
         "tools/mediapipe_tracker.py", // Relative Path
