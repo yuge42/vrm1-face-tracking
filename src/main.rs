@@ -18,7 +18,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(VrmPlugin)
         .add_systems(Startup, (setup_tracker, setup_scene))
-        .add_systems(Update, dump_tracker_frames)
+        .add_systems(Update, (dump_tracker_frames, check_vrm_load_status))
         .run();
 }
 
@@ -72,7 +72,32 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // Load VRM model from filesystem
     // Place your VRM 1.0 model at assets/vrm/model.vrm
-    commands.spawn(VrmHandle(asset_server.load("vrm/model.vrm")));
+    let vrm_handle = asset_server.load("vrm/model.vrm");
+    commands.spawn(VrmHandle(vrm_handle));
 
     println!("Scene setup complete. Loading VRM model from assets/vrm/model.vrm");
+    println!("If the model file is not found, the application will continue without it.");
+}
+
+fn check_vrm_load_status(
+    mut events: MessageReader<bevy::asset::AssetEvent<bevy::gltf::Gltf>>,
+    mut reported: Local<bool>,
+) {
+    for event in events.read() {
+        match event {
+            bevy::asset::AssetEvent::Added { .. } => {
+                if !*reported {
+                    println!("✓ VRM model loaded successfully");
+                    *reported = true;
+                }
+            }
+            bevy::asset::AssetEvent::LoadedWithDependencies { .. } => {
+                if !*reported {
+                    println!("✓ VRM model and dependencies loaded successfully");
+                    *reported = true;
+                }
+            }
+            _ => {}
+        }
+    }
 }

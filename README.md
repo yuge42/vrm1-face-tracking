@@ -56,11 +56,11 @@ cargo run
 ```
 
 The application will:
-1. Load the VRM model from `assets/vrm/model.vrm`
-2. Display it in a 3D scene with camera and lighting
+1. Open a 3D rendering window with camera and lighting
+2. Load the VRM model from `assets/vrm/model.vrm` (if present)
 3. Start the Python face tracker and print blendshape data to the console
 
-**Note**: The application requires a VRM file to be present at `assets/vrm/model.vrm`. If the file is not found, the application will still run but the model will not be displayed.
+**Note**: A VRM model file is optional. If `assets/vrm/model.vrm` is not found, the application will still run and track face data, but no model will be displayed in the 3D scene.
 
 ## Environment Variables
 
