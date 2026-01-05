@@ -32,7 +32,7 @@ fn setup_tracker(mut commands: Commands) {
     commands.insert_resource(TrackerReceiver { rx });
     commands.insert_resource(TrackerProcess { child });
 
-    println!("Tracker process started with Python: {}", python_bin);
+    println!("Tracker process started with Python: {python_bin}");
 }
 
 fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
