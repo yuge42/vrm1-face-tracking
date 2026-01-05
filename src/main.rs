@@ -21,15 +21,18 @@ fn main() {
 }
 
 fn setup_tracker(mut commands: Commands) {
+    // Use PYTHON_BIN environment variable if set, otherwise default to "python3"
+    let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
+
     let (child, rx) = spawn_tracker(
-        "python3",
+        &python_bin,
         "tools/mediapipe_tracker.py", // Relative Path
     );
 
     commands.insert_resource(TrackerReceiver { rx });
     commands.insert_resource(TrackerProcess { child });
 
-    println!("Tracker process started");
+    println!("Tracker process started with Python: {python_bin}");
 }
 
 fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
