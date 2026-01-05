@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_vrm1::prelude::*;
 use tracker_ipc::{TrackerFrame, spawn_tracker};
 
 #[derive(Resource)]
@@ -15,7 +16,8 @@ struct TrackerProcess {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, setup_tracker)
+        .add_plugins(VrmPlugin)
+        .add_systems(Startup, (setup_tracker, setup_scene))
         .add_systems(Update, dump_tracker_frames)
         .run();
 }
@@ -50,4 +52,27 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
             frame.ts, blink_l, jaw
         );
     }
+}
+
+fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Spawn camera
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 1.3, 1.5).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+    ));
+
+    // Spawn directional light
+    commands.spawn((
+        DirectionalLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        Transform::from_xyz(3.0, 3.0, 0.3).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    // Load VRM model from filesystem
+    // Place your VRM 1.0 model at assets/vrm/model.vrm
+    commands.spawn(VrmHandle(asset_server.load("vrm/model.vrm")));
+
+    println!("Scene setup complete. Loading VRM model from assets/vrm/model.vrm");
 }

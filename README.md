@@ -2,7 +2,23 @@
 
 Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 
+## Features
+
+- **VRM 1.0 Model Loading**: Load and display VRM 1.0 models from the filesystem
+- **Real-time Face Tracking**: Capture face tracking data using MediaPipe
+- **3D Rendering**: Display VRM models with proper lighting and camera setup
+
 ## Setup
+
+### VRM Model
+
+Place your VRM 1.0 model file in the `assets/vrm/` directory:
+
+1. Obtain a VRM 1.0 model from [VRoid Hub](https://hub.vroid.com/), [VRoid Studio](https://vroid.com/studio), or other VRM-compatible sources
+2. Place the `.vrm` file in `assets/vrm/` and name it `model.vrm`
+3. Alternatively, modify the model path in `src/main.rs`
+
+See `assets/vrm/README.md` for more information about VRM models.
 
 ### Python Environment
 
@@ -39,7 +55,12 @@ export PYTHON_BIN=.venv/bin/python
 cargo run
 ```
 
-The application will automatically start the Python face tracker and display the blendshape data.
+The application will:
+1. Load the VRM model from `assets/vrm/model.vrm`
+2. Display it in a 3D scene with camera and lighting
+3. Start the Python face tracker and print blendshape data to the console
+
+**Note**: The application requires a VRM file to be present at `assets/vrm/model.vrm`. If the file is not found, the application will still run but the model will not be displayed.
 
 ## Environment Variables
 
