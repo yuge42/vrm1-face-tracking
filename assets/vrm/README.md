@@ -1,6 +1,6 @@
 # VRM Model Directory
 
-Place your VRM 1.0 model files in this directory.
+Place your VRM 1.0 model files in this directory to be loaded by Bevy's asset server.
 
 ## Getting VRM Models
 
@@ -12,10 +12,12 @@ You can obtain VRM models from:
 
 ## Default Model
 
-By default, the application looks for `model.vrm` in this directory. You can either:
+By default, the application loads the model from the asset path `vrm/model.vrm` (relative to the `assets/` directory). You can either:
 
 1. Place your VRM file here and name it `model.vrm`
-2. Modify the code in `src/main.rs` to load a different filename
+2. Modify the code in `src/main.rs` to load a different asset path
+
+**Note**: Models must be in the `assets/` directory or its subdirectories to be accessible by Bevy's asset server. You cannot load VRM files from arbitrary filesystem paths.
 
 ## File Format
 

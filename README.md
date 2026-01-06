@@ -4,7 +4,7 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 
 ## Features
 
-- **VRM 1.0 Model Loading**: Load and display VRM 1.0 models from the filesystem
+- **VRM 1.0 Model Loading**: Load and display VRM 1.0 models via Bevy's asset server
 - **Real-time Face Tracking**: Capture face tracking data using MediaPipe
 - **3D Rendering**: Display VRM models with proper lighting and camera setup
 
@@ -57,10 +57,10 @@ cargo run
 
 The application will:
 1. Open a 3D rendering window with camera and lighting
-2. Load the VRM model from `assets/vrm/model.vrm` (if present)
+2. Load the VRM model from the asset path `vrm/model.vrm` (which corresponds to `assets/vrm/model.vrm` in the project directory) using Bevy's asset server
 3. Start the Python face tracker and print blendshape data to the console
 
-**Note**: A VRM model file is optional. If `assets/vrm/model.vrm` is not found, the application will still run and track face data, but no model will be displayed in the 3D scene.
+**Note**: A VRM model file is optional. If the asset at `vrm/model.vrm` is not found, the application will still run and track face data, but no model will be displayed in the 3D scene. Models must be placed in the `assets/` directory to be loaded by Bevy's asset server.
 
 ## Environment Variables
 

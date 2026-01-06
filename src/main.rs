@@ -70,12 +70,12 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
         Transform::from_xyz(3.0, 3.0, 0.3).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Load VRM model from filesystem
-    // Place your VRM 1.0 model at assets/vrm/model.vrm
+    // Load VRM model via asset server
+    // The asset path "vrm/model.vrm" corresponds to assets/vrm/model.vrm
     let vrm_handle = asset_server.load("vrm/model.vrm");
     commands.spawn(VrmHandle(vrm_handle));
 
-    println!("Scene setup complete. Loading VRM model from assets/vrm/model.vrm");
+    println!("Scene setup complete. Loading VRM model via asset server: vrm/model.vrm");
     println!("If the model file is not found, the application will continue without it.");
 }
 
