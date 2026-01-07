@@ -18,6 +18,7 @@ bevy_vrm1 = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 crossbeam-channel = "0.5"
+rfd = "0.17.1"
 
 [package]
 name = "vrm1-face-tracking"
@@ -35,3 +36,4 @@ tracker_ipc = { path = "crates/tracker_ipc" }
 bevy = { workspace = true }
 bevy_vrm1 = { workspace = true }
 crossbeam-channel = { workspace = true }
+rfd = { workspace = true }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_vrm1::prelude::*;
+use std::path::PathBuf;
 use tracker_ipc::{TrackerFrame, spawn_tracker};
 
 #[derive(Resource)]
@@ -13,12 +14,29 @@ struct TrackerProcess {
     child: std::process::Child,
 }
 
+#[derive(Resource, Default)]
+struct VrmModelPath {
+    path: Option<PathBuf>,
+}
+
+#[derive(Component)]
+struct CurrentVrmEntity;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(VrmPlugin)
+        .init_resource::<VrmModelPath>()
         .add_systems(Startup, (setup_tracker, setup_scene))
-        .add_systems(Update, (dump_tracker_frames, check_vrm_load_status))
+        .add_systems(
+            Update,
+            (
+                dump_tracker_frames,
+                check_vrm_load_status,
+                handle_file_dialog_input,
+                load_vrm_from_path,
+            ),
+        )
         .run();
 }
 
@@ -73,10 +91,11 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Load VRM model via asset server
     // The asset path "vrm/model.vrm" corresponds to assets/vrm/model.vrm
     let vrm_handle = asset_server.load("vrm/model.vrm");
-    commands.spawn(VrmHandle(vrm_handle));
+    commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
 
     println!("Scene setup complete. Loading VRM model via asset server: vrm/model.vrm");
     println!("If the model file is not found, the application will continue without it.");
+    println!("Press 'O' to open a file dialog and select a different VRM model.");
 }
 
 fn check_vrm_load_status(
@@ -99,5 +118,65 @@ fn check_vrm_load_status(
             }
             _ => {}
         }
+    }
+}
+
+fn handle_file_dialog_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut vrm_path: ResMut<VrmModelPath>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyO) {
+        println!("Opening file dialog...");
+
+        // Open file dialog in a blocking manner
+        // Note: This will block the main thread, but it's acceptable for a file dialog
+        let file = rfd::FileDialog::new()
+            .add_filter("VRM Model", &["vrm"])
+            .set_title("Select VRM Model")
+            .pick_file();
+
+        if let Some(path) = file {
+            println!("Selected file: {}", path.display());
+            vrm_path.path = Some(path);
+        } else {
+            println!("File selection cancelled");
+        }
+    }
+}
+
+fn load_vrm_from_path(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut vrm_path: ResMut<VrmModelPath>,
+    current_vrm_query: Query<Entity, With<CurrentVrmEntity>>,
+) {
+    if let Some(path) = vrm_path.path.take() {
+        // Remove the current VRM entity if it exists
+        for entity in current_vrm_query.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        // Copy the file to the assets/vrm directory so Bevy can load it
+        let assets_dir = std::path::Path::new("assets/vrm");
+        if let Err(e) = std::fs::create_dir_all(assets_dir) {
+            eprintln!("Failed to create assets/vrm directory: {}", e);
+            return;
+        }
+
+        let file_name = path
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("model.vrm"));
+        let dest_path = assets_dir.join(file_name);
+
+        if let Err(e) = std::fs::copy(&path, &dest_path) {
+            eprintln!("Failed to copy VRM file to assets directory: {}", e);
+            return;
+        }
+
+        // Load the VRM model via asset server
+        let asset_path = format!("vrm/{}", file_name.to_string_lossy());
+        println!("Loading VRM model from: {}", asset_path);
+        let vrm_handle = asset_server.load(asset_path);
+        commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
     }
 }
