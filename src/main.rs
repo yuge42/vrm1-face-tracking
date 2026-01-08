@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_vrm1::prelude::*;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
 
 #[derive(Resource)]
@@ -19,6 +20,12 @@ struct VrmModelPath {
     path: Option<PathBuf>,
 }
 
+#[derive(Resource)]
+struct FileDialogChannel {
+    tx: Arc<Mutex<crossbeam_channel::Sender<Option<PathBuf>>>>,
+    rx: crossbeam_channel::Receiver<Option<PathBuf>>,
+}
+
 #[derive(Component)]
 struct CurrentVrmEntity;
 
@@ -27,13 +34,14 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(VrmPlugin)
         .init_resource::<VrmModelPath>()
-        .add_systems(Startup, (setup_tracker, setup_scene))
+        .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
             (
                 dump_tracker_frames,
                 check_vrm_load_status,
                 handle_file_dialog_input,
+                receive_file_dialog_result,
                 load_vrm_from_path,
             ),
         )
@@ -121,25 +129,52 @@ fn check_vrm_load_status(
     }
 }
 
+fn setup_file_dialog(mut commands: Commands) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    commands.insert_resource(FileDialogChannel {
+        tx: Arc::new(Mutex::new(tx)),
+        rx,
+    });
+}
+
 fn handle_file_dialog_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut vrm_path: ResMut<VrmModelPath>,
+    file_dialog_channel: Res<FileDialogChannel>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyO) {
         println!("Opening file dialog...");
 
-        // Open file dialog in a blocking manner
-        // Note: This will block the main thread, but it's acceptable for a file dialog
-        let file = rfd::FileDialog::new()
-            .add_filter("VRM Model", &["vrm"])
-            .set_title("Select VRM Model")
-            .pick_file();
+        let tx = file_dialog_channel.tx.clone();
 
-        if let Some(path) = file {
-            println!("Selected file: {}", path.display());
+        // Spawn a thread to open the file dialog without blocking the main thread
+        std::thread::spawn(move || {
+            let file = rfd::FileDialog::new()
+                .add_filter("VRM Model", &["vrm"])
+                .set_title("Select VRM Model")
+                .pick_file();
+
+            if let Some(path) = &file {
+                println!("Selected file: {}", path.display());
+            } else {
+                println!("File selection cancelled");
+            }
+
+            // Send the result through the channel
+            if let Ok(sender) = tx.lock() {
+                let _ = sender.send(file);
+            }
+        });
+    }
+}
+
+fn receive_file_dialog_result(
+    file_dialog_channel: Res<FileDialogChannel>,
+    mut vrm_path: ResMut<VrmModelPath>,
+) {
+    while let Ok(result) = file_dialog_channel.rx.try_recv() {
+        if let Some(path) = result {
+            println!("Received selected file: {}", path.display());
             vrm_path.path = Some(path);
-        } else {
-            println!("File selection cancelled");
         }
     }
 }
