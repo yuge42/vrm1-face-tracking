@@ -1,8 +1,12 @@
+use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
 use bevy_vrm1::prelude::*;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
+
+mod config;
+use config::AppConfig;
 
 #[derive(Resource)]
 struct TrackerReceiver {
@@ -26,13 +30,46 @@ struct FileDialogChannel {
     rx: crossbeam_channel::Receiver<Option<PathBuf>>,
 }
 
+#[derive(Resource)]
+struct Config {
+    inner: AppConfig,
+}
+
 #[derive(Component)]
 struct CurrentVrmEntity;
 
 fn main() {
+    // Load or create configuration
+    let config = AppConfig::load_or_create().expect("Failed to load configuration");
+
+    // Ensure user VRM directory exists
+    if let Err(e) = config.ensure_user_vrm_dir() {
+        eprintln!("Warning: Failed to create user VRM directory: {}", e);
+    }
+
+    println!(
+        "User VRM models directory: {}",
+        config.user_vrm_dir.display()
+    );
+    println!("Configuration loaded successfully");
+
+    let user_vrm_dir = config.user_vrm_dir.clone();
+
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(AssetPlugin {
+            file_path: "assets".to_string(),
+            ..default()
+        }))
+        .register_asset_source(
+            AssetSourceId::Name("userdata".into()),
+            AssetSource::build().with_reader(move || {
+                Box::new(bevy::asset::io::file::FileAssetReader::new(
+                    user_vrm_dir.clone(),
+                ))
+            }),
+        )
         .add_plugins(VrmPlugin)
+        .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
@@ -80,7 +117,7 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
     }
 }
 
-fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: Res<Config>) {
     // Spawn camera
     commands.spawn((
         Camera3d::default(),
@@ -96,12 +133,20 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
         Transform::from_xyz(3.0, 3.0, 0.3).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Load VRM model via asset server
-    // The asset path "vrm/model.vrm" corresponds to assets/vrm/model.vrm
-    let vrm_handle = asset_server.load("vrm/model.vrm");
+    // Load VRM model from user data directory via custom asset source
+    // First try to load from userdata source, fall back to default assets
+    let default_model_path = format!("userdata://{}", config.inner.default_vrm_model);
+    let vrm_handle = asset_server.load(&default_model_path);
     commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
 
-    println!("Scene setup complete. Loading VRM model via asset server: vrm/model.vrm");
+    println!(
+        "Scene setup complete. Attempting to load VRM model from user data: {}",
+        default_model_path
+    );
+    println!(
+        "User VRM directory: {}",
+        config.inner.user_vrm_dir.display()
+    );
     println!("If the model file is not found, the application will continue without it.");
     println!("Press 'O' to open a file dialog and select a different VRM model.");
 }
@@ -140,17 +185,20 @@ fn setup_file_dialog(mut commands: Commands) {
 fn handle_file_dialog_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     file_dialog_channel: Res<FileDialogChannel>,
+    config: Res<Config>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyO) {
         println!("Opening file dialog...");
 
         let tx = file_dialog_channel.tx.clone();
+        let user_vrm_dir = config.inner.user_vrm_dir.clone();
 
         // Spawn a thread to open the file dialog without blocking the main thread
         std::thread::spawn(move || {
             let file = rfd::FileDialog::new()
                 .add_filter("VRM Model", &["vrm"])
                 .set_title("Select VRM Model")
+                .set_directory(&user_vrm_dir)
                 .pick_file();
 
             if let Some(path) = &file {
@@ -184,6 +232,7 @@ fn load_vrm_from_path(
     asset_server: Res<AssetServer>,
     mut vrm_path: ResMut<VrmModelPath>,
     current_vrm_query: Query<Entity, With<CurrentVrmEntity>>,
+    config: Res<Config>,
 ) {
     if let Some(path) = vrm_path.path.take() {
         // Remove the current VRM entity if it exists
@@ -191,26 +240,30 @@ fn load_vrm_from_path(
             commands.entity(entity).despawn();
         }
 
-        // Copy the file to the assets/vrm directory so Bevy can load it
-        let assets_dir = std::path::Path::new("assets/vrm");
-        if let Err(e) = std::fs::create_dir_all(assets_dir) {
-            eprintln!("Failed to create assets/vrm directory: {}", e);
+        // Copy the file to the user VRM directory so Bevy can load it
+        let user_vrm_dir = &config.inner.user_vrm_dir;
+        if let Err(e) = std::fs::create_dir_all(user_vrm_dir) {
+            eprintln!("Failed to create user VRM directory: {}", e);
             return;
         }
 
         let file_name = path
             .file_name()
             .unwrap_or_else(|| std::ffi::OsStr::new("model.vrm"));
-        let dest_path = assets_dir.join(file_name);
+        let dest_path = user_vrm_dir.join(file_name);
 
-        if let Err(e) = std::fs::copy(&path, &dest_path) {
-            eprintln!("Failed to copy VRM file to assets directory: {}", e);
-            return;
+        // Only copy if source and destination are different
+        if path != dest_path {
+            if let Err(e) = std::fs::copy(&path, &dest_path) {
+                eprintln!("Failed to copy VRM file to user directory: {}", e);
+                return;
+            }
+            println!("Copied VRM file to: {}", dest_path.display());
         }
 
-        // Load the VRM model via asset server
-        let asset_path = format!("vrm/{}", file_name.to_string_lossy());
-        println!("Loading VRM model from: {}", asset_path);
+        // Load the VRM model via the userdata asset source
+        let asset_path = format!("userdata://{}", file_name.to_string_lossy());
+        println!("Loading VRM model from user data: {}", asset_path);
         let vrm_handle = asset_server.load(asset_path);
         commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
     }

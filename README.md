@@ -4,22 +4,42 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 
 ## Features
 
-- **VRM 1.0 Model Loading**: Load and display VRM 1.0 models via Bevy's asset server
+- **VRM 1.0 Model Loading**: Load and display VRM 1.0 models from user data directory via custom asset source
 - **File Dialog**: Select VRM models from the filesystem at runtime using a native file picker (press 'O' key)
+- **User Data Directory**: VRM models are stored in platform-specific user data directories
+- **Configuration**: Application configuration stored in platform-specific config directory
 - **Real-time Face Tracking**: Capture face tracking data using MediaPipe
 - **3D Rendering**: Display VRM models with proper lighting and camera setup
 
 ## Setup
 
+### User Data Directory
+
+The application stores VRM models and configuration in platform-specific user data directories:
+
+- **Linux**: `~/.local/share/vrm1-face-tracking/vrm_models/`
+- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\yuge42\vrm1-face-tracking\data\vrm_models\`
+- **macOS**: `~/Library/Application Support/com.yuge42.vrm1-face-tracking/vrm_models/`
+
+The configuration file is stored in:
+
+- **Linux**: `~/.config/vrm1-face-tracking/config.toml`
+- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\yuge42\vrm1-face-tracking\config\config.toml`
+- **macOS**: `~/Library/Application Support/com.yuge42.vrm1-face-tracking/config.toml`
+
+These directories are created automatically when you first run the application.
+
 ### VRM Model
 
-Place your VRM 1.0 model file in the `assets/vrm/` directory:
+### VRM Model
+
+To use a default VRM model on startup:
 
 1. Obtain a VRM 1.0 model from [VRoid Hub](https://hub.vroid.com/), [VRoid Studio](https://vroid.com/studio), or other VRM-compatible sources
-2. Place the `.vrm` file in `assets/vrm/` and name it `model.vrm`
-3. Alternatively, modify the model path in `src/main.rs`
+2. Place the `.vrm` file in your user data directory (see paths above) and name it `model.vrm`
+3. Alternatively, use the file dialog (press 'O' key) to select any VRM file at runtime
 
-See `assets/vrm/README.md` for more information about VRM models.
+The application uses a custom asset source to load VRM models directly from the user data directory, so models persist across application updates.
 
 ### Python Environment
 
@@ -58,10 +78,10 @@ cargo run
 
 The application will:
 1. Open a 3D rendering window with camera and lighting
-2. Load the VRM model from the asset path `vrm/model.vrm` (which corresponds to `assets/vrm/model.vrm` in the project directory) using Bevy's asset server
+2. Load the VRM model from the user data directory using a custom asset source
 3. Start the Python face tracker and print blendshape data to the console
 
-**Note**: A VRM model file is optional. If the asset at `vrm/model.vrm` is not found, the application will still run and track face data, but no model will be displayed in the 3D scene. Models must be placed in the `assets/` directory to be loaded by Bevy's asset server.
+**Note**: A VRM model file is optional. If `model.vrm` is not found in the user data directory, the application will still run and track face data, but no model will be displayed in the 3D scene.
 
 ## Usage
 
@@ -69,10 +89,19 @@ The application will:
 
 You can load VRM models in two ways:
 
-1. **Default model**: Place a VRM file at `assets/vrm/model.vrm` (loaded automatically on startup)
+1. **Default model**: Place a VRM file named `model.vrm` in your user data directory (see paths in "User Data Directory" section above)
 2. **File dialog**: Press the `O` key while the application is running to open a native file picker and select any VRM file from your filesystem
 
-When you select a file via the file dialog, it will be copied to the `assets/vrm/` directory and loaded, replacing the current model. The file dialog runs in a separate thread to keep the application responsive.
+When you select a file via the file dialog, it will be copied to your user data directory and loaded using Bevy's custom asset source, replacing the current model. The file dialog runs in a separate thread to keep the application responsive.
+
+### Configuration
+
+The application configuration is stored in `config.toml` in your platform-specific config directory. The configuration includes:
+
+- `user_vrm_dir`: Path to the directory where VRM models are stored
+- `default_vrm_model`: Filename of the default VRM model to load on startup
+
+The configuration file is created automatically with sensible defaults when you first run the application. You can edit it manually if needed.
 
 ## Environment Variables
 
