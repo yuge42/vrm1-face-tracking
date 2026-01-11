@@ -62,7 +62,7 @@ impl AppConfig {
 
 /// Get the user's VRM models directory
 fn get_user_vrm_dir() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("com", "yuge42", "vrm1-face-tracking") {
+    if let Some(proj_dirs) = ProjectDirs::from("", "", "vrm1-face-tracking") {
         proj_dirs.data_dir().join("vrm_models")
     } else {
         // Fallback to current directory if we can't determine project dirs
@@ -72,7 +72,7 @@ fn get_user_vrm_dir() -> PathBuf {
 
 /// Get the configuration file path
 fn get_config_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if let Some(proj_dirs) = ProjectDirs::from("com", "yuge42", "vrm1-face-tracking") {
+    if let Some(proj_dirs) = ProjectDirs::from("", "", "vrm1-face-tracking") {
         Ok(proj_dirs.config_dir().join("config.toml"))
     } else {
         Err("Could not determine config directory".into())

@@ -18,28 +18,16 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 The application stores VRM models and configuration in platform-specific user data directories:
 
 - **Linux**: `~/.local/share/vrm1-face-tracking/vrm_models/`
-- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\yuge42\vrm1-face-tracking\data\vrm_models\`
-- **macOS**: `~/Library/Application Support/com.yuge42.vrm1-face-tracking/vrm_models/`
+- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\vrm1-face-tracking\data\vrm_models\`
+- **macOS**: `~/Library/Application Support/vrm1-face-tracking/vrm_models/`
 
 The configuration file is stored in:
 
 - **Linux**: `~/.config/vrm1-face-tracking/config.toml`
-- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\yuge42\vrm1-face-tracking\config\config.toml`
-- **macOS**: `~/Library/Application Support/com.yuge42.vrm1-face-tracking/config.toml`
+- **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\vrm1-face-tracking\config\config.toml`
+- **macOS**: `~/Library/Application Support/vrm1-face-tracking/config.toml`
 
 These directories are created automatically when you first run the application.
-
-### VRM Model
-
-### VRM Model
-
-To use a default VRM model on startup:
-
-1. Obtain a VRM 1.0 model from [VRoid Hub](https://hub.vroid.com/), [VRoid Studio](https://vroid.com/studio), or other VRM-compatible sources
-2. Place the `.vrm` file in your user data directory (see paths above) and name it `model.vrm`
-3. Alternatively, use the file dialog (press 'O' key) to select any VRM file at runtime
-
-The application uses a custom asset source to load VRM models directly from the user data directory, so models persist across application updates.
 
 ### Python Environment
 
