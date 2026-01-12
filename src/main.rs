@@ -56,10 +56,7 @@ fn main() {
     let user_vrm_dir = config.user_vrm_dir.clone();
 
     App::new()
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
-            file_path: "assets".to_string(),
-            ..default()
-        }))
+        // Register custom asset source BEFORE adding plugins
         .register_asset_source(
             AssetSourceId::Name("userdata".into()),
             AssetSource::build().with_reader(move || {
@@ -68,6 +65,10 @@ fn main() {
                 ))
             }),
         )
+        .add_plugins(DefaultPlugins.set(AssetPlugin {
+            file_path: "assets".to_string(),
+            ..default()
+        }))
         .add_plugins(VrmPlugin)
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
