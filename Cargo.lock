@@ -3932,8 +3932,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "rfd"
 version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "069d6129dede311430d0dcf1ded88a7affc7a342c2d8e6336043d43ed14dac17"
+source = "git+https://github.com/PolyMeilex/rfd?branch=master#7bd7cbad9232156d6652ead8bfdf35f9fe3d923f"
 dependencies = [
  "block2 0.6.2",
  "dispatch2",
