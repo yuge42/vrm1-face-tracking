@@ -15,7 +15,7 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 
 ### User Data Directory
 
-The application stores VRM models and configuration in platform-specific user data directories:
+The application stores VRM models and configuration in platform-specific user data directories (managed by the `directories` crate):
 
 - **Linux**: `~/.local/share/vrm1-face-tracking/vrm_models/`
 - **Windows**: `C:\Users\<USERNAME>\AppData\Roaming\vrm1-face-tracking\data\vrm_models\`
