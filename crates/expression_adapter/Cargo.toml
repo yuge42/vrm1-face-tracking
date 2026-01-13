@@ -1,0 +1,11 @@
+[package]
+name = "expression_adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Trait and adapters for mapping face tracker data to VRM expressions"
+
+[dependencies]
