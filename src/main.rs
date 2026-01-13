@@ -44,7 +44,7 @@ fn main() {
 
     // Ensure user VRM directory exists
     if let Err(e) = config.ensure_user_vrm_dir() {
-        eprintln!("Warning: Failed to create user VRM directory: {}", e);
+        eprintln!("Warning: Failed to create user VRM directory: {e}");
     }
 
     println!(
@@ -141,8 +141,7 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: R
     commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
 
     println!(
-        "Scene setup complete. Attempting to load VRM model from user data: {}",
-        default_model_path
+        "Scene setup complete. Attempting to load VRM model from user data: {default_model_path}"
     );
     println!(
         "User VRM directory: {}",
@@ -244,7 +243,7 @@ fn load_vrm_from_path(
         // Copy the file to the user VRM directory so Bevy can load it
         let user_vrm_dir = &config.inner.user_vrm_dir;
         if let Err(e) = std::fs::create_dir_all(user_vrm_dir) {
-            eprintln!("Failed to create user VRM directory: {}", e);
+            eprintln!("Failed to create user VRM directory: {e}");
             return;
         }
 
@@ -256,7 +255,7 @@ fn load_vrm_from_path(
         // Only copy if source and destination are different
         if path != dest_path {
             if let Err(e) = std::fs::copy(&path, &dest_path) {
-                eprintln!("Failed to copy VRM file to user directory: {}", e);
+                eprintln!("Failed to copy VRM file to user directory: {e}");
                 return;
             }
             println!("Copied VRM file to: {}", dest_path.display());
@@ -264,7 +263,7 @@ fn load_vrm_from_path(
 
         // Load the VRM model via the userdata asset source
         let asset_path = format!("userdata://{}", file_name.to_string_lossy());
-        println!("Loading VRM model from user data: {}", asset_path);
+        println!("Loading VRM model from user data: {asset_path}");
         let vrm_handle = asset_server.load(asset_path);
         commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
     }
