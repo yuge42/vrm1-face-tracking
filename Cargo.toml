@@ -4,6 +4,7 @@ members = ["crates/*", "."]
 default-members = ["."]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
@@ -35,6 +36,7 @@ description.workspace = true
 
 [dependencies]
 tracker_ipc = { path = "crates/tracker_ipc" }
+expression_adapter = { path = "crates/expression_adapter" }
 bevy = { workspace = true }
 bevy_vrm1 = { workspace = true }
 crossbeam-channel = { workspace = true }

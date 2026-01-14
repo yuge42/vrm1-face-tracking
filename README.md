@@ -9,6 +9,7 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 - **User Data Directory**: VRM models are stored in platform-specific user data directories
 - **Configuration**: Application configuration stored in platform-specific config directory
 - **Real-time Face Tracking**: Capture face tracking data using MediaPipe
+- **Expression Adapter**: Flexible trait-based system for mapping tracker blendshapes to VRM expressions
 - **3D Rendering**: Display VRM models with proper lighting and camera setup
 
 ## Setup
@@ -90,6 +91,28 @@ The application configuration is stored in `config.toml` in your platform-specif
 - `default_vrm_model`: Filename of the default VRM model to load on startup
 
 The configuration file is created automatically with sensible defaults when you first run the application. You can edit it manually if needed.
+
+## Architecture
+
+### Expression Adapter System
+
+The application uses a flexible trait-based system to convert raw face tracking data into VRM expressions:
+
+- **MediaPipe Face Landmarker** outputs 52 ARKit-style blendshapes (e.g., `eyeBlinkLeft`, `jawOpen`, `mouthSmileLeft`)
+- **BlendshapeToExpression Trait** defines the interface for mapping tracker data to VRM expressions
+- **ArkitToVrmAdapter** provides a default implementation mapping ARKit blendshapes to VRM 1.0 expression presets
+
+#### VRM Expression Presets
+
+The system supports all VRM 1.0 expression presets:
+
+- **Emotions**: `happy`, `angry`, `sad`, `relaxed`, `surprised`
+- **Lip Sync**: `aa`, `ih`, `ou`, `ee`, `oh`
+- **Blink**: `blink`, `blinkLeft`, `blinkRight`
+- **Gaze**: `lookUp`, `lookDown`, `lookLeft`, `lookRight`
+- **Other**: `neutral`
+
+For more details on the expression adapter system, see [crates/expression_adapter/README.md](crates/expression_adapter/README.md).
 
 ## Environment Variables
 

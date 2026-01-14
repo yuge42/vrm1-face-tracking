@@ -1,6 +1,7 @@
 use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
 use bevy_vrm1::prelude::*;
+use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
@@ -102,19 +103,25 @@ fn setup_tracker(mut commands: Commands) {
 }
 
 fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
+    let adapter = ArkitToVrmAdapter;
+
     while let Ok(frame) = rx.rx.try_recv() {
-        let blink_l = frame
-            .blendshapes
-            .get("eyeBlinkLeft")
-            .copied()
-            .unwrap_or(0.0);
+        // Use the expression adapter to convert ARKit blendshapes to VRM expressions
+        let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
 
-        let jaw = frame.blendshapes.get("jawOpen").copied().unwrap_or(0.0);
+        // Print the converted expressions
+        if !vrm_expressions.is_empty() {
+            let expr_summary: Vec<String> = vrm_expressions
+                .iter()
+                .map(|e| format!("{}={:.2}", e.preset.as_str(), e.weight))
+                .collect();
 
-        println!(
-            "ts={:.3} blinkL={:.2} jawOpen={:.2}",
-            frame.ts, blink_l, jaw
-        );
+            println!(
+                "ts={:.3} expressions=[{}]",
+                frame.ts,
+                expr_summary.join(", ")
+            );
+        }
     }
 }
 
