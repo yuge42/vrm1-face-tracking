@@ -1,7 +1,7 @@
 use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
 use bevy_vrm1::prelude::*;
-use expression_adapter::{ArkitToVrmAdapter, ExpressionAdapter};
+use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
@@ -107,7 +107,7 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
 
     while let Ok(frame) = rx.rx.try_recv() {
         // Use the expression adapter to convert ARKit blendshapes to VRM expressions
-        let vrm_expressions = adapter.adapt(&frame.blendshapes);
+        let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
 
         // Print the converted expressions
         if !vrm_expressions.is_empty() {

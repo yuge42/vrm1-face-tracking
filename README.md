@@ -99,7 +99,7 @@ The configuration file is created automatically with sensible defaults when you 
 The application uses a flexible trait-based system to convert raw face tracking data into VRM expressions:
 
 - **MediaPipe Face Landmarker** outputs 52 ARKit-style blendshapes (e.g., `eyeBlinkLeft`, `jawOpen`, `mouthSmileLeft`)
-- **ExpressionAdapter Trait** defines the interface for mapping tracker data to VRM expressions
+- **BlendshapeToExpression Trait** defines the interface for mapping tracker data to VRM expressions
 - **ArkitToVrmAdapter** provides a default implementation mapping ARKit blendshapes to VRM 1.0 expression presets
 
 #### VRM Expression Presets

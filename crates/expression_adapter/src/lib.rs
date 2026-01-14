@@ -86,7 +86,7 @@ impl VrmExpression {
     }
 }
 
-/// Trait for adapting raw tracker blendshape data to VRM expressions
+/// Trait for converting raw tracker blendshape data to VRM expressions
 ///
 /// This trait provides the interface for converting tracker-specific blendshape data
 /// (e.g., ARKit-style blendshapes from MediaPipe) into VRM 1.0 expression presets.
@@ -95,12 +95,12 @@ impl VrmExpression {
 ///
 /// ```
 /// use std::collections::HashMap;
-/// use expression_adapter::{ExpressionAdapter, VrmExpression, VrmExpressionPreset};
+/// use expression_adapter::{BlendshapeToExpression, VrmExpression, VrmExpressionPreset};
 ///
 /// struct MyAdapter;
 ///
-/// impl ExpressionAdapter for MyAdapter {
-///     fn adapt(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
+/// impl BlendshapeToExpression for MyAdapter {
+///     fn to_vrm_expressions(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
 ///         let mut expressions = Vec::new();
 ///         
 ///         // Simple direct mapping for blink
@@ -112,7 +112,7 @@ impl VrmExpression {
 ///     }
 /// }
 /// ```
-pub trait ExpressionAdapter {
+pub trait BlendshapeToExpression {
     /// Convert raw tracker blendshapes to VRM expressions
     ///
     /// # Arguments
@@ -122,7 +122,7 @@ pub trait ExpressionAdapter {
     /// # Returns
     ///
     /// A vector of VRM expressions with their weights
-    fn adapt(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression>;
+    fn to_vrm_expressions(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression>;
 }
 
 /// Default adapter for ARKit-style blendshapes (e.g., from MediaPipe)
@@ -135,8 +135,8 @@ pub trait ExpressionAdapter {
 /// - Mouth shape to phoneme mappings for lip sync
 pub struct ArkitToVrmAdapter;
 
-impl ExpressionAdapter for ArkitToVrmAdapter {
-    fn adapt(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
+impl BlendshapeToExpression for ArkitToVrmAdapter {
+    fn to_vrm_expressions(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
         let mut expressions = Vec::new();
 
         // Helper to get blendshape value
@@ -252,7 +252,7 @@ mod tests {
         blendshapes.insert("eyeBlinkLeft".to_string(), 0.8);
         blendshapes.insert("eyeBlinkRight".to_string(), 0.9);
 
-        let expressions = adapter.adapt(&blendshapes);
+        let expressions = adapter.to_vrm_expressions(&blendshapes);
 
         // Should have BlinkLeft, BlinkRight, and combined Blink
         assert!(
@@ -285,7 +285,7 @@ mod tests {
         blendshapes.insert("mouthSmileLeft".to_string(), 0.7);
         blendshapes.insert("mouthSmileRight".to_string(), 0.7);
 
-        let expressions = adapter.adapt(&blendshapes);
+        let expressions = adapter.to_vrm_expressions(&blendshapes);
 
         assert!(
             expressions
@@ -302,7 +302,7 @@ mod tests {
         blendshapes.insert("mouthSmileLeft".to_string(), 0.2);
         blendshapes.insert("mouthSmileRight".to_string(), 0.2);
 
-        let expressions = adapter.adapt(&blendshapes);
+        let expressions = adapter.to_vrm_expressions(&blendshapes);
 
         // Should not include Happy due to threshold
         assert!(
@@ -319,7 +319,7 @@ mod tests {
         blendshapes.insert("eyeLookUpLeft".to_string(), 0.6);
         blendshapes.insert("eyeLookUpRight".to_string(), 0.4);
 
-        let expressions = adapter.adapt(&blendshapes);
+        let expressions = adapter.to_vrm_expressions(&blendshapes);
 
         let look_up = expressions
             .iter()

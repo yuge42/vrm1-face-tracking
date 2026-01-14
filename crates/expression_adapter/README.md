@@ -4,7 +4,7 @@ A Rust crate providing a flexible trait-based system for mapping raw face tracke
 
 ## Overview
 
-The `expression_adapter` crate defines the `ExpressionAdapter` trait, which provides a standard interface for converting tracker-specific blendshape data (such as ARKit-style blendshapes from MediaPipe) into VRM 1.0 expressions.
+The `expression_adapter` crate defines the `BlendshapeToExpression` trait, which provides a standard interface for converting tracker-specific blendshape data (such as ARKit-style blendshapes from MediaPipe) into VRM 1.0 expressions.
 
 ## Features
 
@@ -51,7 +51,7 @@ According to the [VRM 1.0 specification](https://github.com/vrm-c/vrm-specificat
 ### Using the Default ARKit Adapter
 
 ```rust
-use expression_adapter::{ArkitToVrmAdapter, ExpressionAdapter};
+use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression};
 use std::collections::HashMap;
 
 // Create the adapter
@@ -65,7 +65,7 @@ blendshapes.insert("mouthSmileLeft".to_string(), 0.7);
 blendshapes.insert("mouthSmileRight".to_string(), 0.7);
 
 // Convert to VRM expressions
-let vrm_expressions = adapter.adapt(&blendshapes);
+let vrm_expressions = adapter.to_vrm_expressions(&blendshapes);
 
 // Use the expressions
 for expr in vrm_expressions {
@@ -76,13 +76,13 @@ for expr in vrm_expressions {
 ### Creating a Custom Adapter
 
 ```rust
-use expression_adapter::{ExpressionAdapter, VrmExpression, VrmExpressionPreset};
+use expression_adapter::{BlendshapeToExpression, VrmExpression, VrmExpressionPreset};
 use std::collections::HashMap;
 
 struct MyCustomAdapter;
 
-impl ExpressionAdapter for MyCustomAdapter {
-    fn adapt(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
+impl BlendshapeToExpression for MyCustomAdapter {
+    fn to_vrm_expressions(&self, raw_blendshapes: &HashMap<String, f32>) -> Vec<VrmExpression> {
         let mut expressions = Vec::new();
         
         // Custom mapping logic
