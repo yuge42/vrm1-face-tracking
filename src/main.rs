@@ -78,12 +78,15 @@ fn main() {
             Update,
             (
                 dump_tracker_frames,
-                apply_tracker_to_vrm,
                 check_vrm_load_status,
                 handle_file_dialog_input,
                 receive_file_dialog_result,
                 load_vrm_from_path,
             ),
+        )
+        .add_systems(
+            PostUpdate,
+            apply_tracker_to_vrm.before(VrmSystemSets::Expressions),
         )
         .run();
 }
