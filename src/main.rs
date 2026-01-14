@@ -195,13 +195,16 @@ fn check_vrm_load_status(
 }
 
 /// Attach LiveExpressionWeights to VRM entities when they're initialized
+#[allow(clippy::type_complexity)]
 fn attach_live_expression_weights(
     mut commands: Commands,
     vrm_query: Query<Entity, (With<Vrm>, With<Initialized>, Without<LiveExpressionWeights>)>,
 ) {
     for entity in vrm_query.iter() {
-        commands.entity(entity).insert(LiveExpressionWeights::new());
-        println!("Attached LiveExpressionWeights to VRM entity {:?}", entity);
+        commands
+            .entity(entity)
+            .insert(LiveExpressionWeights::new());
+        println!("Attached LiveExpressionWeights to VRM entity {entity:?}");
     }
 }
 
