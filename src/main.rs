@@ -78,6 +78,7 @@ fn main() {
             Update,
             (
                 dump_tracker_frames,
+                apply_tracker_to_vrm,
                 check_vrm_load_status,
                 handle_file_dialog_input,
                 receive_file_dialog_result,
@@ -121,6 +122,37 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
                 frame.ts,
                 expr_summary.join(", ")
             );
+        }
+    }
+}
+
+fn apply_tracker_to_vrm(
+    rx: Res<TrackerReceiver>,
+    vrm_query: Query<Entity, With<Vrm>>,
+    mut transform_query: Query<&mut Transform>,
+    searcher: ChildSearcher,
+) {
+    let adapter = ArkitToVrmAdapter;
+
+    while let Ok(frame) = rx.rx.try_recv() {
+        // Convert ARKit blendshapes to VRM expressions
+        let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
+
+        // Apply expressions to each loaded VRM model
+        for vrm_entity in vrm_query.iter() {
+            for expr in &vrm_expressions {
+                // Find the expression entity by name
+                let expression_name = expr.preset.as_str();
+                if let Some(expression_entity) =
+                    searcher.find_from_name(vrm_entity, expression_name)
+                {
+                    // Set the expression weight via Transform.translation.x
+                    // This is how bevy_vrm1 handles expression weights (same as VRMA)
+                    if let Ok(mut transform) = transform_query.get_mut(expression_entity) {
+                        transform.translation.x = expr.weight;
+                    }
+                }
+            }
         }
     }
 }
