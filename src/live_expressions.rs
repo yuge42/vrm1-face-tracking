@@ -44,6 +44,8 @@ impl LiveExpressionWeights {
         self.clear();
 
         // Set new weights
+        // Note: expr.preset.as_str() returns canonical VRM expression names
+        // as defined in the VRM 1.0 specification, guaranteed to be valid
         for expr in expressions {
             self.set_weight(expr.preset.as_str(), expr.weight);
         }
@@ -147,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_update_from_expressions() {
-        use expression_adapter::{VrmExpression as AdapterExpression, VrmExpressionPreset};
+        use expression_adapter::VrmExpressionPreset;
 
         let mut weights = LiveExpressionWeights::new();
         let expressions = vec![
