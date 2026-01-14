@@ -135,7 +135,7 @@ fn apply_tracker_to_vrm(
     let adapter = ArkitToVrmAdapter;
 
     while let Ok(frame) = rx.rx.try_recv() {
-        // Convert ARKit blendshapes to VRM expressions
+        // Convert ARKit blendshapes to VRM expressions once per frame
         let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
 
         // Apply expressions to each loaded VRM model
