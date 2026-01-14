@@ -95,6 +95,9 @@ fn build_expression_morph_map(
     morph_query: Query<&MorphWeights>,
 ) {
     for (vrm_entity, vrm_children) in vrm_query.iter() {
+        println!("\n=== VRM Load: Building Expression Morph Map ===");
+        println!("VRM Entity: {vrm_entity:?}");
+
         let mut map = ExpressionMorphMap::default();
 
         // Find the expressions root
@@ -103,18 +106,25 @@ fn build_expression_morph_map(
             &name_query,
             bevy_vrm1::prelude::Vrm::EXPRESSIONS_ROOT,
         ) else {
+            println!("  No expressions root found!");
             continue;
         };
 
+        println!("  Expressions root: {expressions_root:?}");
+
         // Get expression children
         let Ok(expr_children) = children_query.get(expressions_root) else {
+            println!("  No expression children found!");
             continue;
         };
+
+        println!("  Found {} expression entities", expr_children.len());
 
         // For each expression entity, discover which morphs it controls
         for expr_entity in expr_children.iter() {
             if let Ok(expr_name) = name_query.get(expr_entity) {
                 let expression_name = expr_name.as_str().to_string();
+                println!("\n  Expression: '{expression_name}' (entity: {expr_entity:?})");
 
                 // Discover morph bindings by traversing the VRM hierarchy
                 // We need to find entities with MorphWeights that this expression affects
@@ -127,7 +137,12 @@ fn build_expression_morph_map(
                 );
 
                 if !bindings.is_empty() {
+                    println!("    -> {} morph target bindings found", bindings.len());
                     map.bindings.insert(expression_name, bindings);
+                } else {
+                    println!(
+                        "    -> No morph bindings found (expression may not affect any meshes)"
+                    );
                 }
             }
         }
@@ -135,9 +150,7 @@ fn build_expression_morph_map(
         // Insert the map for efficient runtime use
         let bindings_count = map.bindings.len();
         commands.entity(vrm_entity).insert(map);
-        println!(
-            "Built expression morph map for VRM entity {vrm_entity:?} with {bindings_count} expressions"
-        );
+        println!("\n=== Expression Morph Map Complete: {bindings_count} expressions mapped ===\n");
     }
 }
 
@@ -147,9 +160,9 @@ fn build_expression_morph_map(
 /// which morph indices correspond to the given expression.
 fn discover_morph_bindings(
     vrm_entity: Entity,
-    _expression_name: &str,
+    expression_name: &str,
     children_query: &Query<&Children>,
-    _name_query: &Query<&Name>,
+    name_query: &Query<&Name>,
     morph_query: &Query<&MorphWeights>,
 ) -> Vec<(Entity, usize)> {
     let mut bindings = Vec::new();
@@ -158,6 +171,8 @@ fn discover_morph_bindings(
     let mut to_visit = vec![vrm_entity];
     let mut visited = std::collections::HashSet::new();
 
+    println!("    Discovering morph bindings for expression '{expression_name}'...");
+
     while let Some(entity) = to_visit.pop() {
         if !visited.insert(entity) {
             continue;
@@ -165,9 +180,24 @@ fn discover_morph_bindings(
 
         // If this entity has MorphWeights, we need to check its morphs
         if let Ok(morph_weights) = morph_query.get(entity) {
-            // For now, we'll map all morphs since we don't have the detailed binding info
-            // In a full implementation, we'd parse the VRM metadata to get precise mappings
-            for (index, _weight) in morph_weights.weights().iter().enumerate() {
+            let entity_name = name_query
+                .get(entity)
+                .map(|n| n.as_str())
+                .unwrap_or("<unnamed>");
+
+            println!("    Mesh entity: {entity:?} (name: '{entity_name}')");
+            println!(
+                "      MorphWeights count: {}",
+                morph_weights.weights().len()
+            );
+
+            // Log each morph target name and index
+            for (index, weight) in morph_weights.weights().iter().enumerate() {
+                println!("        [{index}] initial_weight={weight:.3}");
+
+                // For now, we'll map all morphs since we don't have the detailed binding info
+                // In a full implementation, we'd parse the VRM metadata to get precise mappings
+                // TODO: Use bevy_vrm1's expression metadata to get the correct bindings
                 bindings.push((entity, index));
             }
         }
