@@ -7,7 +7,10 @@ use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
 
 mod config;
+mod live_expressions;
+
 use config::AppConfig;
+use live_expressions::{LiveExpressionWeights, LiveExpressionsPlugin};
 
 #[derive(Resource)]
 struct TrackerReceiver {
@@ -71,6 +74,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(VrmPlugin)
+        .add_plugins(LiveExpressionsPlugin)
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
@@ -79,6 +83,7 @@ fn main() {
             (
                 dump_tracker_frames,
                 check_vrm_load_status,
+                attach_live_expression_weights,
                 handle_file_dialog_input,
                 receive_file_dialog_result,
                 load_vrm_from_path,
@@ -102,12 +107,20 @@ fn setup_tracker(mut commands: Commands) {
     println!("Tracker process started with Python: {python_bin}");
 }
 
-fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
+fn dump_tracker_frames(
+    rx: Res<TrackerReceiver>,
+    mut vrm_query: Query<&mut LiveExpressionWeights, With<Vrm>>,
+) {
     let adapter = ArkitToVrmAdapter;
 
     while let Ok(frame) = rx.rx.try_recv() {
         // Use the expression adapter to convert ARKit blendshapes to VRM expressions
         let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
+
+        // Apply to all VRM entities with LiveExpressionWeights
+        for mut weights in vrm_query.iter_mut() {
+            weights.update_from_expressions(&vrm_expressions);
+        }
 
         // Print the converted expressions
         if !vrm_expressions.is_empty() {
@@ -178,6 +191,17 @@ fn check_vrm_load_status(
             }
             _ => {}
         }
+    }
+}
+
+/// Attach LiveExpressionWeights to VRM entities when they're initialized
+fn attach_live_expression_weights(
+    mut commands: Commands,
+    vrm_query: Query<Entity, (With<Vrm>, With<Initialized>, Without<LiveExpressionWeights>)>,
+) {
+    for entity in vrm_query.iter() {
+        commands.entity(entity).insert(LiveExpressionWeights::new());
+        println!("Attached LiveExpressionWeights to VRM entity {:?}", entity);
     }
 }
 
