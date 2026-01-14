@@ -201,9 +201,7 @@ fn attach_live_expression_weights(
     vrm_query: Query<Entity, (With<Vrm>, With<Initialized>, Without<LiveExpressionWeights>)>,
 ) {
     for entity in vrm_query.iter() {
-        commands
-            .entity(entity)
-            .insert(LiveExpressionWeights::new());
+        commands.entity(entity).insert(LiveExpressionWeights::new());
         println!("Attached LiveExpressionWeights to VRM entity {entity:?}");
     }
 }
