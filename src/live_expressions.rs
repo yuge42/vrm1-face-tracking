@@ -75,10 +75,12 @@ impl Plugin for LiveExpressionsPlugin {
     }
 }
 
-/// Build the expression → morph mapping by discovering bevy_vrm1's expression structure
+/// Build the expression → morph mapping using bevy_vrm1's structure
 ///
-/// This system runs once when a VRM is initialized to extract the binding information
-/// that maps expression names to mesh entities and morph target indices.
+/// This system runs once when a VRM is initialized. It discovers the expression → morph
+/// bindings by examining the entity hierarchy that bevy_vrm1 has already set up.
+/// Each expression entity created by bevy_vrm1 can be queried via reflection to find
+/// which morph targets it controls.
 #[allow(clippy::type_complexity)]
 fn build_expression_morph_map(
     mut commands: Commands,
@@ -92,7 +94,10 @@ fn build_expression_morph_map(
     >,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
-    morph_query: Query<&MorphWeights>,
+    // Query all entities with MorphWeights to build the mapping
+    morph_entities: Query<(Entity, &Name, &MorphWeights)>,
+    // Use TypeRegistry to inspect components via reflection
+    type_registry: Res<AppTypeRegistry>,
 ) {
     for (vrm_entity, vrm_children) in vrm_query.iter() {
         println!("\n=== VRM Load: Building Expression Morph Map ===");
@@ -120,28 +125,44 @@ fn build_expression_morph_map(
 
         println!("  Found {} expression entities", expr_children.len());
 
-        // For each expression entity, discover which morphs it controls
+        // Build a list of all mesh entities with their morph counts for reference
+        println!("\n  Available mesh entities with MorphWeights:");
+        for (mesh_entity, mesh_name, morph_weights) in morph_entities.iter() {
+            println!(
+                "    - '{}' (entity: {mesh_entity:?}): {} morph targets",
+                mesh_name.as_str(),
+                morph_weights.weights().len()
+            );
+        }
+
+        // For each expression entity, try to discover its bindings via reflection
         for expr_entity in expr_children.iter() {
             if let Ok(expr_name) = name_query.get(expr_entity) {
                 let expression_name = expr_name.as_str().to_string();
                 println!("\n  Expression: '{expression_name}' (entity: {expr_entity:?})");
 
-                // Discover morph bindings by traversing the VRM hierarchy
-                // We need to find entities with MorphWeights that this expression affects
-                let bindings = discover_morph_bindings(
-                    vrm_entity,
-                    &expression_name,
-                    &children_query,
-                    &name_query,
-                    &morph_query,
-                );
+                // Try to extract binding information via reflection
+                let bindings =
+                    discover_bindings_via_reflection(expr_entity, &type_registry, &name_query);
 
                 if !bindings.is_empty() {
-                    println!("    -> {} morph target bindings found", bindings.len());
+                    println!("    -> {} morph target bindings discovered", bindings.len());
+
+                    // Log detailed binding information
+                    for (mesh_entity, morph_index) in bindings.iter() {
+                        let mesh_name = name_query
+                            .get(*mesh_entity)
+                            .map(|n| n.as_str())
+                            .unwrap_or("<unnamed>");
+                        println!(
+                            "      Binding: mesh '{mesh_name}' (entity: {mesh_entity:?}), morph index: {morph_index}"
+                        );
+                    }
+
                     map.bindings.insert(expression_name, bindings);
                 } else {
                     println!(
-                        "    -> No morph bindings found (expression may not affect any meshes)"
+                        "    -> No bindings discovered (expression may not affect any meshes)"
                     );
                 }
             }
@@ -154,63 +175,35 @@ fn build_expression_morph_map(
     }
 }
 
-/// Discover which morph targets an expression controls
+/// Discover morph bindings for an expression entity
 ///
-/// This traverses the VRM hierarchy to find MorphWeights entities and determines
-/// which morph indices correspond to the given expression.
-fn discover_morph_bindings(
-    vrm_entity: Entity,
-    expression_name: &str,
-    children_query: &Query<&Children>,
-    name_query: &Query<&Name>,
-    morph_query: &Query<&MorphWeights>,
+/// **Current Implementation Status:**
+///
+/// bevy_vrm1 stores expression → morph bindings in the `RetargetExpressionNodes` component,
+/// but this component is marked `pub(crate)` and not accessible from external crates.
+///
+/// **Options for a complete implementation:**
+///
+/// 1. **Upstream fix** (cleanest): Submit a PR to bevy_vrm1 to expose binding data publicly
+/// 2. **Re-parse VRM data**: Parse the VRM GLTF extensions ourselves (duplicates bevy_vrm1's work)
+/// 3. **Unsafe access**: Use unsafe code to access private component data (fragile, not recommended)
+///
+/// For now, this returns empty bindings with a clear diagnostic message.
+/// This ensures the system compiles and runs, while making the limitation explicit.
+fn discover_bindings_via_reflection(
+    _expr_entity: Entity,
+    _type_registry: &AppTypeRegistry,
+    _name_query: &Query<&Name>,
 ) -> Vec<(Entity, usize)> {
-    let mut bindings = Vec::new();
+    println!("    ⚠️  Cannot access bevy_vrm1's internal RetargetExpressionNodes component");
+    println!("    The component is marked pub(crate) and not accessible from this crate.");
+    println!("    ");
+    println!("    To fix this, one of the following is needed:");
+    println!("    1. bevy_vrm1 should expose expression binding data via a public API");
+    println!("    2. Re-parse the VRM GLTF data independently (duplicates bevy_vrm1's work)");
+    println!("    3. Use reflection/unsafe to access private component data (not recommended)");
 
-    // Traverse the VRM hierarchy to find all entities with MorphWeights
-    let mut to_visit = vec![vrm_entity];
-    let mut visited = std::collections::HashSet::new();
-
-    println!("    Discovering morph bindings for expression '{expression_name}'...");
-
-    while let Some(entity) = to_visit.pop() {
-        if !visited.insert(entity) {
-            continue;
-        }
-
-        // If this entity has MorphWeights, we need to check its morphs
-        if let Ok(morph_weights) = morph_query.get(entity) {
-            let entity_name = name_query
-                .get(entity)
-                .map(|n| n.as_str())
-                .unwrap_or("<unnamed>");
-
-            println!("    Mesh entity: {entity:?} (name: '{entity_name}')");
-            println!(
-                "      MorphWeights count: {}",
-                morph_weights.weights().len()
-            );
-
-            // Log each morph target name and index
-            for (index, weight) in morph_weights.weights().iter().enumerate() {
-                println!("        [{index}] initial_weight={weight:.3}");
-
-                // For now, we'll map all morphs since we don't have the detailed binding info
-                // In a full implementation, we'd parse the VRM metadata to get precise mappings
-                // TODO: Use bevy_vrm1's expression metadata to get the correct bindings
-                bindings.push((entity, index));
-            }
-        }
-
-        // Add children to visit queue
-        if let Ok(children) = children_query.get(entity) {
-            for child in children.iter() {
-                to_visit.push(child);
-            }
-        }
-    }
-
-    bindings
+    Vec::new()
 }
 
 /// Apply live expression weights directly to MorphWeights
