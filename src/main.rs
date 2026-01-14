@@ -143,11 +143,16 @@ fn apply_tracker_to_vrm(
 
         // Apply expressions to each loaded VRM model
         for vrm_entity in vrm_query.iter() {
+            // Find the expressions root entity (VRMC_vrm.expressions)
+            let Some(expressions_root) = searcher.find_expressions_root(vrm_entity) else {
+                continue;
+            };
+
             for expr in &vrm_expressions {
-                // Find the expression entity by name
+                // Find the expression entity by name under the expressions root
                 let expression_name = expr.preset.as_str();
                 if let Some(expression_entity) =
-                    searcher.find_from_name(vrm_entity, expression_name)
+                    searcher.find_from_name(expressions_root, expression_name)
                 {
                     // Set the expression weight via Transform.translation.x
                     // This is how bevy_vrm1 handles expression weights (same as VRMA)
