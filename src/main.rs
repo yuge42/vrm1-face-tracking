@@ -1,10 +1,10 @@
 use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
-use bevy_vrm1::prelude::*;
 use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
+use vrm_loader::{VrmAsset, VrmHandle, VrmLoaderPlugin};
 
 mod config;
 use config::AppConfig;
@@ -70,7 +70,7 @@ fn main() {
             file_path: "assets".to_string(),
             ..default()
         }))
-        .add_plugins(VrmPlugin)
+        .add_plugins(VrmLoaderPlugin)
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
@@ -144,7 +144,7 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: R
     // Load VRM model from user data directory via custom asset source
     // First try to load from userdata source, fall back to default assets
     let default_model_path = format!("userdata://{}", config.inner.default_vrm_model);
-    let vrm_handle = asset_server.load(&default_model_path);
+    let vrm_handle: Handle<VrmAsset> = asset_server.load(&default_model_path);
     commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
 
     println!(
@@ -159,18 +159,18 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: R
 }
 
 fn check_vrm_load_status(
-    mut events: MessageReader<bevy::asset::AssetEvent<bevy::gltf::Gltf>>,
+    mut events: MessageReader<AssetEvent<VrmAsset>>,
     mut reported: Local<bool>,
 ) {
     for event in events.read() {
         match event {
-            bevy::asset::AssetEvent::Added { .. } => {
+            AssetEvent::Added { .. } => {
                 if !*reported {
                     println!("✓ VRM model loaded successfully");
                     *reported = true;
                 }
             }
-            bevy::asset::AssetEvent::LoadedWithDependencies { .. } => {
+            AssetEvent::LoadedWithDependencies { .. } => {
                 if !*reported {
                     println!("✓ VRM model and dependencies loaded successfully");
                     *reported = true;
@@ -271,7 +271,7 @@ fn load_vrm_from_path(
         // Load the VRM model via the userdata asset source
         let asset_path = format!("userdata://{}", file_name.to_string_lossy());
         println!("Loading VRM model from user data: {asset_path}");
-        let vrm_handle = asset_server.load(asset_path);
+        let vrm_handle: Handle<VrmAsset> = asset_server.load(asset_path);
         commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
     }
 }
