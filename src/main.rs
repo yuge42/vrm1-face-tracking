@@ -125,7 +125,7 @@ fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
     }
 }
 
-fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: Res<Config>) {
+fn setup_scene(mut commands: Commands, config: Res<Config>) {
     // Spawn camera
     commands.spawn((
         Camera3d::default(),
@@ -141,21 +141,12 @@ fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>, config: R
         Transform::from_xyz(3.0, 3.0, 0.3).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Load VRM model from user data directory via custom asset source
-    // First try to load from userdata source, fall back to default assets
-    let default_model_path = format!("userdata://{}", config.inner.default_vrm_model);
-    let vrm_handle: Handle<VrmAsset> = asset_server.load(&default_model_path);
-    commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
-
-    println!(
-        "Scene setup complete. Attempting to load VRM model from user data: {default_model_path}"
-    );
+    println!("Scene setup complete.");
     println!(
         "User VRM directory: {}",
         config.inner.user_vrm_dir.display()
     );
-    println!("If the model file is not found, the application will continue without it.");
-    println!("Press 'O' to open a file dialog and select a different VRM model.");
+    println!("Press 'O' to open a file dialog and select a VRM model to load.");
 }
 
 fn check_vrm_load_status(
@@ -271,7 +262,7 @@ fn load_vrm_from_path(
         // Load the VRM model via the userdata asset source
         let asset_path = format!("userdata://{}", file_name.to_string_lossy());
         println!("Loading VRM model from user data: {asset_path}");
-        let vrm_handle: Handle<VrmAsset> = asset_server.load(asset_path);
+        let vrm_handle: Handle<VrmAsset> = asset_server.load(&asset_path);
         commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
     }
 }
