@@ -85,9 +85,9 @@ fn parse_vrm_from_bytes(
     let vrm_extension = extract_vrm_extension(&json)?;
 
     // Load the glTF asset using Bevy's loader
-    // For now, we'll create a handle to the glTF that will be loaded separately
-    let gltf_path = load_context.path().to_path_buf();
-    let gltf_handle: Handle<Gltf> = load_context.load(gltf_path);
+    // Use the full asset path (including source) to preserve userdata:// scheme
+    let asset_path = load_context.path().to_owned();
+    let gltf_handle: Handle<Gltf> = load_context.load(asset_path);
 
     // Combine preset and custom expressions
     let mut all_expressions = HashMap::new();
