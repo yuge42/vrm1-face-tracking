@@ -15,7 +15,6 @@ description = "Face Tracking adapter for VRM models"
 
 [workspace.dependencies]
 bevy = "0.17"
-bevy_vrm1 = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 crossbeam-channel = "0.5"
@@ -37,8 +36,8 @@ description.workspace = true
 [dependencies]
 tracker_ipc = { path = "crates/tracker_ipc" }
 expression_adapter = { path = "crates/expression_adapter" }
+vrm_loader = { path = "crates/vrm_loader" }
 bevy = { workspace = true }
-bevy_vrm1 = { workspace = true }
 crossbeam-channel = { workspace = true }
 rfd = { workspace = true }
 directories = { workspace = true }

@@ -168,12 +168,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.100"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1462,20 +1456,6 @@ dependencies = [
  "bevy_platform",
  "disqualified",
  "thread_local",
-]
-
-[[package]]
-name = "bevy_vrm1"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c367f1d99c69b420b6abc0f6500d58517e3b1bafbfae1e36d1b752fbed24aed"
-dependencies = [
- "anyhow",
- "bevy",
- "bitflags 2.10.0",
- "paste",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4750,7 +4730,6 @@ name = "vrm1-face-tracking"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_vrm1",
  "crossbeam-channel",
  "directories",
  "expression_adapter",
@@ -4758,6 +4737,17 @@ dependencies = [
  "serde",
  "toml",
  "tracker_ipc",
+ "vrm_loader",
+]
+
+[[package]]
+name = "vrm_loader"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
