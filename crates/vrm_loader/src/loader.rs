@@ -86,7 +86,8 @@ fn parse_vrm_from_bytes(
 
     // Load the glTF asset using Bevy's loader
     // Use the full asset path (including source) to preserve userdata:// scheme
-    let asset_path = load_context.path().to_owned();
+    // TODO: In Bevy 0.18+, use path() instead of asset_path() as path() will return AssetPath
+    let asset_path = load_context.asset_path().to_owned();
     let gltf_handle: Handle<Gltf> = load_context.load(asset_path);
 
     // Combine preset and custom expressions
