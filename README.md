@@ -94,6 +94,24 @@ The configuration file is created automatically with sensible defaults when you 
 
 ## Architecture
 
+### Custom VRM 1.0 Parser
+
+The application uses a custom, minimal VRM 1.0 parser (`vrm_loader` crate) instead of external VRM libraries:
+
+- **Lightweight**: Parses only what's needed for face tracking (no VRMA/animation assumptions)
+- **Plain Data Structures**: VRM metadata exposed as simple Rust structs
+- **Bevy Integration**: Works seamlessly with Bevy's asset system and built-in glTF loader
+- **Console Logging**: Automatically prints VRM model metadata when loaded
+
+The parser extracts:
+- VRM metadata (name, authors, license, etc.)
+- Expression definitions with morph target bindings
+- Humanoid bone mapping
+- Look-at configuration
+- First-person view settings
+
+For more details, see [crates/vrm_loader/README.md](crates/vrm_loader/README.md).
+
 ### Expression Adapter System
 
 The application uses a flexible trait-based system to convert raw face tracking data into VRM expressions:
