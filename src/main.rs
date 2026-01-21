@@ -292,15 +292,14 @@ fn load_vrm_from_path(
     }
 }
 
-/// System that builds VRM expression maps for mesh entities.
+/// System that builds VRM expression maps for entities with MorphWeights.
 ///
 /// This system runs after a VRM scene is spawned and builds the mapping from
-/// expression names to morph target indices for each mesh entity.
+/// expression names to morph target indices for each entity with MorphWeights.
 ///
-/// Note: This is a simplified implementation that applies expression mappings to all
-/// mesh entities. A more accurate implementation would map glTF node indices to
-/// specific entities, but this works for most VRM models where expressions
-/// are defined on facial meshes.
+/// In Bevy's glTF loader, MorphWeights is attached to parent node entities,
+/// while MeshMorphWeights is on the child mesh primitive entities. When we update
+/// MorphWeights on the parent, it automatically syncs to the children.
 #[allow(clippy::type_complexity)]
 fn build_expression_maps(
     mut commands: Commands,
@@ -311,7 +310,7 @@ fn build_expression_maps(
         (With<CurrentVrmEntity>, Without<VrmExpressionMap>),
     >,
     children_query: Query<&Children>,
-    mesh_query: Query<Entity, With<Mesh3d>>,
+    morph_weights_query: Query<Entity, With<MorphWeights>>,
 ) {
     for (vrm_entity, vrm_handle, children) in vrm_entities.iter() {
         let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
@@ -322,21 +321,18 @@ fn build_expression_maps(
             continue;
         };
 
-        // Collect all mesh entities in the scene
-        let mut mesh_entities = Vec::new();
-        collect_all_meshes(children, &children_query, &mesh_query, &mut mesh_entities);
+        // Collect all entities with MorphWeights in the scene
+        let mut morph_entities = Vec::new();
+        collect_morph_weight_entities(
+            children,
+            &children_query,
+            &morph_weights_query,
+            &mut morph_entities,
+        );
 
         // Build expression maps
-        // Since we don't have a reliable way to map glTF node indices to entities,
-        // we'll create a combined expression map with all morph target bindings
-        // and apply it to all mesh entities.
-        //
-        // Note: This is a simplified approach. The morph_bind.index represents
-        // the morph target index within a specific glTF node's mesh. Ideally,
-        // we would only apply these to the correct mesh entities. However, for
-        // most VRM models where facial expressions are on specific facial meshes,
-        // this approach works because the morph target indices are consistent
-        // across the model's meshes.
+        // We create a combined expression map with all morph target bindings
+        // and apply it to all entities with MorphWeights
         let mut combined_expr_map = VrmExpressionMap {
             expression_to_morphs: HashMap::new(),
         };
@@ -351,10 +347,10 @@ fn build_expression_maps(
             }
         }
 
-        // Apply the expression map to all mesh entities
-        for &mesh_entity in &mesh_entities {
+        // Apply the expression map to all entities with MorphWeights
+        for &morph_entity in &morph_entities {
             commands
-                .entity(mesh_entity)
+                .entity(morph_entity)
                 .insert(combined_expr_map.clone());
         }
 
@@ -364,29 +360,34 @@ fn build_expression_maps(
         });
 
         info!(
-            "Built expression maps for VRM: {} ({} mesh entities)",
+            "Built expression maps for VRM: {} ({} morph entities)",
             vrm_asset.meta.name,
-            mesh_entities.len()
+            morph_entities.len()
         );
     }
 }
 
-/// Helper function to collect all mesh entities from the scene hierarchy
-fn collect_all_meshes(
+/// Helper function to collect all entities with MorphWeights from the scene hierarchy
+fn collect_morph_weight_entities(
     children: &Children,
     children_query: &Query<&Children>,
-    mesh_query: &Query<Entity, With<Mesh3d>>,
-    mesh_entities: &mut Vec<Entity>,
+    morph_weights_query: &Query<Entity, With<MorphWeights>>,
+    morph_entities: &mut Vec<Entity>,
 ) {
     for child in children.iter() {
-        // Check if this child is a mesh entity
-        if mesh_query.get(child).is_ok() {
-            mesh_entities.push(child);
+        // Check if this child has MorphWeights
+        if morph_weights_query.get(child).is_ok() {
+            morph_entities.push(child);
         }
 
         // Recursively check children
         if let Ok(grandchildren) = children_query.get(child) {
-            collect_all_meshes(grandchildren, children_query, mesh_query, mesh_entities);
+            collect_morph_weight_entities(
+                grandchildren,
+                children_query,
+                morph_weights_query,
+                morph_entities,
+            );
         }
     }
 }
