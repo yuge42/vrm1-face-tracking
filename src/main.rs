@@ -296,6 +296,11 @@ fn load_vrm_from_path(
 ///
 /// This system runs after a VRM scene is spawned and builds the mapping from
 /// expression names to morph target indices for each mesh entity.
+///
+/// Note: This is a simplified implementation that applies expression mappings to all
+/// mesh entities. A more accurate implementation would map glTF node indices to
+/// specific entities, but this works for most VRM models where expressions
+/// are defined on facial meshes.
 #[allow(clippy::type_complexity)]
 fn build_expression_maps(
     mut commands: Commands,
@@ -306,7 +311,7 @@ fn build_expression_maps(
         (With<CurrentVrmEntity>, Without<VrmExpressionMap>),
     >,
     children_query: Query<&Children>,
-    mesh_query: Query<(Entity, &Name), With<Mesh3d>>,
+    mesh_query: Query<Entity, With<Mesh3d>>,
 ) {
     for (vrm_entity, vrm_handle, children) in vrm_entities.iter() {
         let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
@@ -317,42 +322,33 @@ fn build_expression_maps(
             continue;
         };
 
-        // Build a mapping from node index to mesh entities
-        // For now, we'll use a simple approach: collect all mesh entities
-        // and try to match them with expression morph target bindings
+        // Collect all mesh entities in the scene
         let mut mesh_entities = Vec::new();
-        collect_mesh_entities(children, &children_query, &mesh_query, &mut mesh_entities);
+        collect_all_meshes(children, &children_query, &mesh_query, &mut mesh_entities);
 
-        // Build expression maps for each mesh entity
-        // Key: mesh entity, Value: expression map
-        let mut entity_expr_maps: HashMap<Entity, VrmExpressionMap> = HashMap::new();
+        // Build expression maps
+        // Since we don't have a reliable way to map glTF node indices to entities,
+        // we'll create a combined expression map with all morph target bindings
+        // and apply it to all mesh entities
+        let mut combined_expr_map = VrmExpressionMap {
+            expression_to_morphs: HashMap::new(),
+        };
 
         for (expression_name, expression_data) in vrm_asset.expressions.iter() {
             for morph_bind in expression_data.morph_target_binds.iter() {
-                // Find the mesh entity that corresponds to this node
-                // In a glTF file, each node can have a mesh, and we need to find the entity
-                // that represents that mesh
-                // For now, we'll assume the node index matches the order of mesh entities
-                if let Some(&mesh_entity) = mesh_entities.get(morph_bind.node) {
-                    let expr_map =
-                        entity_expr_maps
-                            .entry(mesh_entity)
-                            .or_insert_with(|| VrmExpressionMap {
-                                expression_to_morphs: HashMap::new(),
-                            });
-
-                    expr_map
-                        .expression_to_morphs
-                        .entry(expression_name.clone())
-                        .or_default()
-                        .push((morph_bind.index, morph_bind.weight));
-                }
+                combined_expr_map
+                    .expression_to_morphs
+                    .entry(expression_name.clone())
+                    .or_default()
+                    .push((morph_bind.index, morph_bind.weight));
             }
         }
 
-        // Insert the expression maps into the mesh entities
-        for (mesh_entity, expr_map) in entity_expr_maps {
-            commands.entity(mesh_entity).insert(expr_map);
+        // Apply the expression map to all mesh entities
+        for &mesh_entity in &mesh_entities {
+            commands
+                .entity(mesh_entity)
+                .insert(combined_expr_map.clone());
         }
 
         // Mark the VRM entity as processed
@@ -360,26 +356,30 @@ fn build_expression_maps(
             expression_to_morphs: HashMap::new(),
         });
 
-        info!("Built expression maps for VRM: {}", vrm_asset.meta.name);
+        info!(
+            "Built expression maps for VRM: {} ({} mesh entities)",
+            vrm_asset.meta.name,
+            mesh_entities.len()
+        );
     }
 }
 
-/// Helper function to collect mesh entities from the scene hierarchy
-fn collect_mesh_entities(
+/// Helper function to collect all mesh entities from the scene hierarchy
+fn collect_all_meshes(
     children: &Children,
     children_query: &Query<&Children>,
-    mesh_query: &Query<(Entity, &Name), With<Mesh3d>>,
+    mesh_query: &Query<Entity, With<Mesh3d>>,
     mesh_entities: &mut Vec<Entity>,
 ) {
     for child in children.iter() {
         // Check if this child is a mesh entity
-        if let Ok((entity, _name)) = mesh_query.get(child) {
-            mesh_entities.push(entity);
+        if mesh_query.get(child).is_ok() {
+            mesh_entities.push(child);
         }
 
         // Recursively check children
         if let Ok(grandchildren) = children_query.get(child) {
-            collect_mesh_entities(grandchildren, children_query, mesh_query, mesh_entities);
+            collect_all_meshes(grandchildren, children_query, mesh_query, mesh_entities);
         }
     }
 }
