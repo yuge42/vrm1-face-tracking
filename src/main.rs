@@ -329,7 +329,14 @@ fn build_expression_maps(
         // Build expression maps
         // Since we don't have a reliable way to map glTF node indices to entities,
         // we'll create a combined expression map with all morph target bindings
-        // and apply it to all mesh entities
+        // and apply it to all mesh entities.
+        //
+        // Note: This is a simplified approach. The morph_bind.index represents
+        // the morph target index within a specific glTF node's mesh. Ideally,
+        // we would only apply these to the correct mesh entities. However, for
+        // most VRM models where facial expressions are on specific facial meshes,
+        // this approach works because the morph target indices are consistent
+        // across the model's meshes.
         let mut combined_expr_map = VrmExpressionMap {
             expression_to_morphs: HashMap::new(),
         };
