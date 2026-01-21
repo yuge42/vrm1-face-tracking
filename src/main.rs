@@ -1,6 +1,7 @@
 use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
-use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression};
+use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression, VrmExpression};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracker_ipc::{TrackerFrame, spawn_tracker};
@@ -39,6 +40,21 @@ struct Config {
 #[derive(Component)]
 struct CurrentVrmEntity;
 
+/// Component that stores the VRM expression to morph target mapping for a mesh entity.
+/// This is attached to mesh entities after a VRM is loaded to enable applying expressions.
+#[derive(Component, Clone)]
+struct VrmExpressionMap {
+    /// Map from VRM expression name (e.g., "happy", "blink") to morph target indices and weights
+    /// The Vec contains tuples of (morph_target_index, base_weight)
+    expression_to_morphs: HashMap<String, Vec<(usize, f32)>>,
+}
+
+/// Resource that stores the current VRM expression weights from face tracking.
+#[derive(Resource, Default)]
+struct CurrentExpressions {
+    expressions: Vec<VrmExpression>,
+}
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -73,6 +89,7 @@ fn main() {
         .add_plugins(VrmLoaderPlugin)
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
+        .init_resource::<CurrentExpressions>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
@@ -82,6 +99,8 @@ fn main() {
                 handle_file_dialog_input,
                 receive_file_dialog_result,
                 load_vrm_from_path,
+                build_expression_maps,
+                apply_expressions,
             ),
         )
         .run();
@@ -102,12 +121,18 @@ fn setup_tracker(mut commands: Commands) {
     println!("Tracker process started with Python: {python_bin}");
 }
 
-fn dump_tracker_frames(rx: Res<TrackerReceiver>) {
+fn dump_tracker_frames(
+    rx: Res<TrackerReceiver>,
+    mut current_expressions: ResMut<CurrentExpressions>,
+) {
     let adapter = ArkitToVrmAdapter;
 
     while let Ok(frame) = rx.rx.try_recv() {
         // Use the expression adapter to convert ARKit blendshapes to VRM expressions
         let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
+
+        // Store expressions for the apply_expressions system to use
+        current_expressions.expressions = vrm_expressions.clone();
 
         // Print the converted expressions
         if !vrm_expressions.is_empty() {
@@ -264,5 +289,142 @@ fn load_vrm_from_path(
         println!("Loading VRM model from user data: {asset_path}");
         let vrm_handle: Handle<VrmAsset> = asset_server.load(&asset_path);
         commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
+    }
+}
+
+/// System that builds VRM expression maps for mesh entities.
+///
+/// This system runs after a VRM scene is spawned and builds the mapping from
+/// expression names to morph target indices for each mesh entity.
+#[allow(clippy::type_complexity)]
+fn build_expression_maps(
+    mut commands: Commands,
+    vrm_assets: Res<Assets<VrmAsset>>,
+    gltf_assets: Res<Assets<bevy::gltf::Gltf>>,
+    vrm_entities: Query<
+        (Entity, &VrmHandle, &Children),
+        (With<CurrentVrmEntity>, Without<VrmExpressionMap>),
+    >,
+    children_query: Query<&Children>,
+    mesh_query: Query<(Entity, &Name), With<Mesh3d>>,
+) {
+    for (vrm_entity, vrm_handle, children) in vrm_entities.iter() {
+        let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
+            continue;
+        };
+
+        let Some(_gltf) = gltf_assets.get(&vrm_asset.gltf) else {
+            continue;
+        };
+
+        // Build a mapping from node index to mesh entities
+        // For now, we'll use a simple approach: collect all mesh entities
+        // and try to match them with expression morph target bindings
+        let mut mesh_entities = Vec::new();
+        collect_mesh_entities(children, &children_query, &mesh_query, &mut mesh_entities);
+
+        // Build expression maps for each mesh entity
+        // Key: mesh entity, Value: expression map
+        let mut entity_expr_maps: HashMap<Entity, VrmExpressionMap> = HashMap::new();
+
+        for (expression_name, expression_data) in vrm_asset.expressions.iter() {
+            for morph_bind in expression_data.morph_target_binds.iter() {
+                // Find the mesh entity that corresponds to this node
+                // In a glTF file, each node can have a mesh, and we need to find the entity
+                // that represents that mesh
+                // For now, we'll assume the node index matches the order of mesh entities
+                if let Some(&mesh_entity) = mesh_entities.get(morph_bind.node) {
+                    let expr_map =
+                        entity_expr_maps
+                            .entry(mesh_entity)
+                            .or_insert_with(|| VrmExpressionMap {
+                                expression_to_morphs: HashMap::new(),
+                            });
+
+                    expr_map
+                        .expression_to_morphs
+                        .entry(expression_name.clone())
+                        .or_default()
+                        .push((morph_bind.index, morph_bind.weight));
+                }
+            }
+        }
+
+        // Insert the expression maps into the mesh entities
+        for (mesh_entity, expr_map) in entity_expr_maps {
+            commands.entity(mesh_entity).insert(expr_map);
+        }
+
+        // Mark the VRM entity as processed
+        commands.entity(vrm_entity).insert(VrmExpressionMap {
+            expression_to_morphs: HashMap::new(),
+        });
+
+        info!("Built expression maps for VRM: {}", vrm_asset.meta.name);
+    }
+}
+
+/// Helper function to collect mesh entities from the scene hierarchy
+fn collect_mesh_entities(
+    children: &Children,
+    children_query: &Query<&Children>,
+    mesh_query: &Query<(Entity, &Name), With<Mesh3d>>,
+    mesh_entities: &mut Vec<Entity>,
+) {
+    for child in children.iter() {
+        // Check if this child is a mesh entity
+        if let Ok((entity, _name)) = mesh_query.get(child) {
+            mesh_entities.push(entity);
+        }
+
+        // Recursively check children
+        if let Ok(grandchildren) = children_query.get(child) {
+            collect_mesh_entities(grandchildren, children_query, mesh_query, mesh_entities);
+        }
+    }
+}
+
+/// System that applies VRM expressions to mesh morph weights.
+///
+/// This system takes the current VRM expressions from face tracking and applies
+/// them to the mesh entities' MorphWeights components.
+fn apply_expressions(
+    current_expressions: Res<CurrentExpressions>,
+    mut mesh_query: Query<(&VrmExpressionMap, &mut MorphWeights)>,
+) {
+    if current_expressions.expressions.is_empty() {
+        return;
+    }
+
+    for (expr_map, mut morph_weights) in mesh_query.iter_mut() {
+        // Build a map from expression name to weight
+        let mut expression_weights: HashMap<String, f32> = HashMap::new();
+        for expr in current_expressions.expressions.iter() {
+            expression_weights.insert(expr.preset.as_str().to_string(), expr.weight);
+        }
+
+        // Calculate the new morph weights
+        // We need to know the total number of morph targets for this mesh
+        let num_morph_targets = morph_weights.weights().len();
+        let mut new_weights = vec![0.0; num_morph_targets];
+
+        // Apply each expression
+        for (expr_name, expr_weight) in expression_weights.iter() {
+            if let Some(morph_bindings) = expr_map.expression_to_morphs.get(expr_name) {
+                for &(morph_idx, base_weight) in morph_bindings {
+                    if morph_idx < num_morph_targets {
+                        new_weights[morph_idx] += expr_weight * base_weight;
+                    }
+                }
+            }
+        }
+
+        // Clamp weights to [0, 1]
+        for weight in new_weights.iter_mut() {
+            *weight = weight.clamp(0.0, 1.0);
+        }
+
+        // Update the morph weights
+        morph_weights.weights_mut().copy_from_slice(&new_weights);
     }
 }
