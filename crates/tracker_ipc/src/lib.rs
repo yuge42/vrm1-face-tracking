@@ -7,11 +7,23 @@ use std::{
     thread,
 };
 
+/// A 3D pose landmark with visibility and presence scores
+#[derive(Debug, Deserialize, Clone)]
+pub struct PoseLandmark {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub visibility: f32,
+    pub presence: f32,
+}
+
 /// A frame coming from python
 #[derive(Debug, Deserialize)]
 pub struct TrackerFrame {
     pub ts: f64,
     pub blendshapes: HashMap<String, f32>,
+    #[serde(default)]
+    pub pose_landmarks: Vec<PoseLandmark>,
 }
 
 /// Run Python process and return a Receiver

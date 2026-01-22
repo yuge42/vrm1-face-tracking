@@ -1,6 +1,6 @@
 # VRM1 Face Tracking
 
-Real-time face tracking for VRM models using MediaPipe Face Landmarker.
+Real-time face and upper body tracking for VRM models using MediaPipe Face Landmarker and Pose Landmarker.
 
 ## Features
 
@@ -8,7 +8,8 @@ Real-time face tracking for VRM models using MediaPipe Face Landmarker.
 - **File Dialog**: Select VRM models from the filesystem at runtime using a native file picker (press 'O' key)
 - **User Data Directory**: VRM models are stored in platform-specific user data directories
 - **Configuration**: Application configuration stored in platform-specific config directory
-- **Real-time Face Tracking**: Capture face tracking data using MediaPipe
+- **Real-time Face Tracking**: Capture face tracking data using MediaPipe Face Landmarker
+- **Real-time Pose Tracking**: Capture upper body pose data using MediaPipe Pose Landmarker
 - **Expression Adapter**: Flexible trait-based system for mapping tracker blendshapes to VRM expressions
 - **3D Rendering**: Display VRM models with proper lighting and camera setup
 
@@ -48,8 +49,9 @@ source .venv/bin/activate
 cd tools
 pip install -r requirements.txt
 
-# Download MediaPipe model
+# Download MediaPipe models
 wget -O face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+wget -O pose_landmarker_full.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task
 cd ..
 ```
 
@@ -68,7 +70,7 @@ cargo run
 The application will:
 1. Open a 3D rendering window with camera and lighting
 2. Load the VRM model from the user data directory using a custom asset source
-3. Start the Python face tracker and print blendshape data to the console
+3. Start the Python face and pose tracker and print tracking data to the console
 
 **Note**: A VRM model file is optional. If `model.vrm` is not found in the user data directory, the application will still run and track face data, but no model will be displayed in the 3D scene.
 
