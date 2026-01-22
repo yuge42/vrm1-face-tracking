@@ -30,3 +30,5 @@ tools/*.task
 # VRM model files (can be large, users should provide their own)
 assets/vrm/*.vrm
 
+__pycache__/
+*.pyc
