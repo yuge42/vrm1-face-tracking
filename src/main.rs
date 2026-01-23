@@ -179,6 +179,42 @@ fn dump_tracker_frames(
                 println!("ts={:.3} pose=[{}]", frame.ts, pose_summary.join(", "));
             }
         }
+
+        // Print pose world landmarks if available
+        if !frame.pose_world_landmarks.is_empty() {
+            // Log upper body world landmarks in meters
+            let key_landmarks = [0, 11, 12, 13, 14, 15, 16];
+            let landmark_names = [
+                "nose",
+                "left_shoulder",
+                "right_shoulder",
+                "left_elbow",
+                "right_elbow",
+                "left_wrist",
+                "right_wrist",
+            ];
+
+            let world_summary: Vec<String> = key_landmarks
+                .iter()
+                .zip(landmark_names.iter())
+                .filter_map(|(&idx, &name)| {
+                    frame.pose_world_landmarks.get(idx).map(|lm| {
+                        format!(
+                            "{}=({:.3},{:.3},{:.3}m,v={:.2})",
+                            name, lm.x, lm.y, lm.z, lm.visibility
+                        )
+                    })
+                })
+                .collect();
+
+            if !world_summary.is_empty() {
+                println!(
+                    "ts={:.3} pose_world=[{}]",
+                    frame.ts,
+                    world_summary.join(", ")
+                );
+            }
+        }
     }
 }
 

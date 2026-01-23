@@ -17,6 +17,16 @@ pub struct PoseLandmark {
     pub presence: f32,
 }
 
+/// A 3D world landmark in real-world coordinates (meters)
+#[derive(Debug, Deserialize, Clone)]
+pub struct PoseWorldLandmark {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub visibility: f32,
+    pub presence: f32,
+}
+
 /// A frame coming from python
 #[derive(Debug, Deserialize)]
 pub struct TrackerFrame {
@@ -24,6 +34,8 @@ pub struct TrackerFrame {
     pub blendshapes: HashMap<String, f32>,
     #[serde(default)]
     pub pose_landmarks: Vec<PoseLandmark>,
+    #[serde(default)]
+    pub pose_world_landmarks: Vec<PoseWorldLandmark>,
 }
 
 /// Run Python process and return a Receiver

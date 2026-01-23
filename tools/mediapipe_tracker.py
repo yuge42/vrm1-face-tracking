@@ -99,7 +99,7 @@ def main():
             # Detect pose landmarks
             pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
             
-            # Extract pose landmarks (33 3D landmarks)
+            # Extract pose landmarks (33 3D landmarks in image coordinates)
             pose_landmarks = []
             if pose_result.pose_landmarks and len(pose_result.pose_landmarks) > 0:
                 for landmark in pose_result.pose_landmarks[0]:
@@ -111,11 +111,24 @@ def main():
                         "presence": landmark.presence
                     })
             
+            # Extract pose world landmarks (33 3D landmarks in real-world coordinates)
+            pose_world_landmarks = []
+            if pose_result.pose_world_landmarks and len(pose_result.pose_world_landmarks) > 0:
+                for landmark in pose_result.pose_world_landmarks[0]:
+                    pose_world_landmarks.append({
+                        "x": landmark.x,
+                        "y": landmark.y,
+                        "z": landmark.z,
+                        "visibility": landmark.visibility,
+                        "presence": landmark.presence
+                    })
+            
             # Output frame data in the expected format
             output = {
                 "ts": time.time(),
                 "blendshapes": blendshapes,
-                "pose_landmarks": pose_landmarks
+                "pose_landmarks": pose_landmarks,
+                "pose_world_landmarks": pose_world_landmarks
             }
             
             print(json.dumps(output), flush=True)
