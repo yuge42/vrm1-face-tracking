@@ -55,6 +55,18 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+// Key upper body landmark indices and names for logging
+const KEY_POSE_LANDMARKS: [usize; 7] = [0, 11, 12, 13, 14, 15, 16];
+const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+];
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -150,21 +162,9 @@ fn dump_tracker_frames(
 
         // Print pose landmark information if available
         if !frame.pose_landmarks.is_empty() {
-            // Log upper body landmarks: nose(0), shoulders(11,12), elbows(13,14), wrists(15,16)
-            let key_landmarks = [0, 11, 12, 13, 14, 15, 16];
-            let landmark_names = [
-                "nose",
-                "left_shoulder",
-                "right_shoulder",
-                "left_elbow",
-                "right_elbow",
-                "left_wrist",
-                "right_wrist",
-            ];
-
-            let pose_summary: Vec<String> = key_landmarks
+            let pose_summary: Vec<String> = KEY_POSE_LANDMARKS
                 .iter()
-                .zip(landmark_names.iter())
+                .zip(KEY_POSE_LANDMARK_NAMES.iter())
                 .filter_map(|(&idx, &name)| {
                     frame.pose_landmarks.get(idx).map(|lm| {
                         format!(
@@ -182,21 +182,9 @@ fn dump_tracker_frames(
 
         // Print pose world landmarks if available
         if !frame.pose_world_landmarks.is_empty() {
-            // Log upper body world landmarks in meters
-            let key_landmarks = [0, 11, 12, 13, 14, 15, 16];
-            let landmark_names = [
-                "nose",
-                "left_shoulder",
-                "right_shoulder",
-                "left_elbow",
-                "right_elbow",
-                "left_wrist",
-                "right_wrist",
-            ];
-
-            let world_summary: Vec<String> = key_landmarks
+            let world_summary: Vec<String> = KEY_POSE_LANDMARKS
                 .iter()
-                .zip(landmark_names.iter())
+                .zip(KEY_POSE_LANDMARK_NAMES.iter())
                 .filter_map(|(&idx, &name)| {
                     frame.pose_world_landmarks.get(idx).map(|lm| {
                         format!(
