@@ -5,6 +5,9 @@
 
 use glam::{Quat, Vec3};
 
+/// Minimum visibility threshold for using a landmark in bone rotation calculations
+const MIN_VISIBILITY_THRESHOLD: f32 = 0.5;
+
 /// MediaPipe pose landmark indices (33 total)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(usize)]
@@ -138,11 +141,19 @@ impl MediaPipePoseAdapter {
         let elbow = landmarks[PoseLandmarkIndex::LeftElbow as usize];
 
         // Check visibility threshold
-        if shoulder.visibility < 0.5 || elbow.visibility < 0.5 {
+        if shoulder.visibility < MIN_VISIBILITY_THRESHOLD
+            || elbow.visibility < MIN_VISIBILITY_THRESHOLD
+        {
             return None;
         }
 
-        let bone_dir = (elbow.to_vec3() - shoulder.to_vec3()).normalize();
+        let bone_vec = elbow.to_vec3() - shoulder.to_vec3();
+        // Check for degenerate case (landmarks too close together)
+        if bone_vec.length_squared() < 1e-6 {
+            return None;
+        }
+        let bone_dir = bone_vec.normalize();
+
         // Default T-pose direction for left upper arm is roughly -X (left)
         let default_dir = Vec3::new(-1.0, 0.0, 0.0);
 
@@ -157,11 +168,18 @@ impl MediaPipePoseAdapter {
         let elbow = landmarks[PoseLandmarkIndex::LeftElbow as usize];
         let wrist = landmarks[PoseLandmarkIndex::LeftWrist as usize];
 
-        if elbow.visibility < 0.5 || wrist.visibility < 0.5 {
+        if elbow.visibility < MIN_VISIBILITY_THRESHOLD
+            || wrist.visibility < MIN_VISIBILITY_THRESHOLD
+        {
             return None;
         }
 
-        let bone_dir = (wrist.to_vec3() - elbow.to_vec3()).normalize();
+        let bone_vec = wrist.to_vec3() - elbow.to_vec3();
+        if bone_vec.length_squared() < 1e-6 {
+            return None;
+        }
+        let bone_dir = bone_vec.normalize();
+
         let default_dir = Vec3::new(-1.0, 0.0, 0.0);
 
         let rotation = rotation_between_vectors(default_dir, bone_dir);
@@ -177,11 +195,18 @@ impl MediaPipePoseAdapter {
         let shoulder = landmarks[PoseLandmarkIndex::RightShoulder as usize];
         let elbow = landmarks[PoseLandmarkIndex::RightElbow as usize];
 
-        if shoulder.visibility < 0.5 || elbow.visibility < 0.5 {
+        if shoulder.visibility < MIN_VISIBILITY_THRESHOLD
+            || elbow.visibility < MIN_VISIBILITY_THRESHOLD
+        {
             return None;
         }
 
-        let bone_dir = (elbow.to_vec3() - shoulder.to_vec3()).normalize();
+        let bone_vec = elbow.to_vec3() - shoulder.to_vec3();
+        if bone_vec.length_squared() < 1e-6 {
+            return None;
+        }
+        let bone_dir = bone_vec.normalize();
+
         // Default T-pose direction for right upper arm is roughly +X (right)
         let default_dir = Vec3::new(1.0, 0.0, 0.0);
 
@@ -198,11 +223,18 @@ impl MediaPipePoseAdapter {
         let elbow = landmarks[PoseLandmarkIndex::RightElbow as usize];
         let wrist = landmarks[PoseLandmarkIndex::RightWrist as usize];
 
-        if elbow.visibility < 0.5 || wrist.visibility < 0.5 {
+        if elbow.visibility < MIN_VISIBILITY_THRESHOLD
+            || wrist.visibility < MIN_VISIBILITY_THRESHOLD
+        {
             return None;
         }
 
-        let bone_dir = (wrist.to_vec3() - elbow.to_vec3()).normalize();
+        let bone_vec = wrist.to_vec3() - elbow.to_vec3();
+        if bone_vec.length_squared() < 1e-6 {
+            return None;
+        }
+        let bone_dir = bone_vec.normalize();
+
         let default_dir = Vec3::new(1.0, 0.0, 0.0);
 
         let rotation = rotation_between_vectors(default_dir, bone_dir);
@@ -216,12 +248,19 @@ impl MediaPipePoseAdapter {
         let left_shoulder = landmarks[PoseLandmarkIndex::LeftShoulder as usize];
         let right_shoulder = landmarks[PoseLandmarkIndex::RightShoulder as usize];
 
-        if left_shoulder.visibility < 0.5 || right_shoulder.visibility < 0.5 {
+        if left_shoulder.visibility < MIN_VISIBILITY_THRESHOLD
+            || right_shoulder.visibility < MIN_VISIBILITY_THRESHOLD
+        {
             return None;
         }
 
         // Compute the shoulder line direction
-        let shoulder_dir = (right_shoulder.to_vec3() - left_shoulder.to_vec3()).normalize();
+        let shoulder_vec = right_shoulder.to_vec3() - left_shoulder.to_vec3();
+        if shoulder_vec.length_squared() < 1e-6 {
+            return None;
+        }
+        let shoulder_dir = shoulder_vec.normalize();
+
         // Default shoulder line in T-pose is along +X
         let default_dir = Vec3::new(1.0, 0.0, 0.0);
 
@@ -247,16 +286,29 @@ fn rotation_between_vectors(from: Vec3, to: Vec3) -> Quat {
 
     if dot < -0.9999 {
         // Vectors are nearly anti-parallel, rotate 180° around any perpendicular axis
-        let axis = if from.x.abs() > 0.9 {
-            Vec3::new(0.0, 1.0, 0.0)
+        // Find the component with the smallest absolute value to determine perpendicular axis
+        let abs_x = from.x.abs();
+        let abs_y = from.y.abs();
+        let abs_z = from.z.abs();
+
+        let axis = if abs_x < abs_y && abs_x < abs_z {
+            Vec3::new(1.0, 0.0, 0.0).cross(from)
+        } else if abs_y < abs_z {
+            Vec3::new(0.0, 1.0, 0.0).cross(from)
         } else {
-            Vec3::new(1.0, 0.0, 0.0)
+            Vec3::new(0.0, 0.0, 1.0).cross(from)
         };
+
         return Quat::from_axis_angle(axis.normalize(), std::f32::consts::PI);
     }
 
     // Standard case: compute rotation axis and angle
-    let axis = from.cross(to).normalize();
+    let axis = from.cross(to);
+    // Check if the cross product is non-zero before normalizing
+    if axis.length_squared() < 1e-6 {
+        return Quat::IDENTITY;
+    }
+    let axis = axis.normalize();
     let angle = dot.acos();
 
     Quat::from_axis_angle(axis, angle)
@@ -284,6 +336,19 @@ mod tests {
         let result = rotation * from;
 
         // Should be close to 'to' vector
+        assert!((result - to).length() < 0.001);
+    }
+
+    #[test]
+    fn test_rotation_between_vectors_180deg() {
+        let from = Vec3::new(1.0, 0.0, 0.0);
+        let to = Vec3::new(-1.0, 0.0, 0.0);
+        let rotation = rotation_between_vectors(from, to);
+
+        // Apply rotation to from vector
+        let result = rotation * from;
+
+        // Should be close to 'to' vector (anti-parallel)
         assert!((result - to).length() < 0.001);
     }
 

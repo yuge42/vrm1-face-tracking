@@ -11,6 +11,9 @@ use vrm_loader::{VrmAsset, VrmHandle, VrmLoaderPlugin};
 mod config;
 use config::AppConfig;
 
+/// Minimum visibility threshold for applying bone rotations
+const MIN_VISIBILITY_THRESHOLD: f32 = 0.5;
+
 #[derive(Resource)]
 struct TrackerReceiver {
     rx: crossbeam_channel::Receiver<TrackerFrame>,
@@ -566,25 +569,28 @@ fn tag_vrm_bones(
         collect_all_entities(children, &children_query, &mut all_entities);
 
         // Tag bone entities based on humanoid mapping
+        // Note: This uses name-based matching as a heuristic. A more robust approach
+        // would use the glTF node index from bone_data.node, but that requires
+        // maintaining a mapping from glTF node indices to Bevy entities.
         for (bone_name, _bone_data) in humanoid.human_bones.iter() {
             // Find entity matching the node index
-            // Note: In glTF, nodes are indexed in the order they appear in the glTF file
-            // We need to find the entity by walking the hierarchy and matching by name
-
-            // For now, we'll use a simple name-based matching approach
+            // We use a simple name-based matching approach for now
             // Try to find entities with names that match VRM bone names
             for &entity in &all_entities {
                 if let Ok(name) = name_query.get(entity) {
                     // Check if this entity might be the bone we're looking for
-                    // This is a heuristic approach - in a more robust implementation,
-                    // we would use the glTF node index from bone_data.node
                     let name_str = name.as_str().to_lowercase();
                     let bone_lower = bone_name.to_lowercase();
 
-                    if name_str.contains(&bone_lower) {
-                        commands.entity(entity).insert(VrmBone {
+                    // Exact match or contains the bone name
+                    // Avoid tagging the same entity multiple times by checking if it already has VrmBone
+                    if name_str == bone_lower || name_str.contains(&bone_lower) {
+                        // Only tag if not already tagged
+                        commands.entity(entity).try_insert(VrmBone {
                             bone_name: bone_name.clone(),
                         });
+                        // Break to avoid tagging multiple entities with the same bone name
+                        break;
                     }
                 }
             }
@@ -618,6 +624,16 @@ fn collect_all_entities(
 ///
 /// This system takes the current bone rotations from pose tracking and applies
 /// them to the bone entities' Transform components.
+///
+/// **Note**: This implementation directly sets the bone rotation, which assumes:
+/// - Bones are in T-pose initially (or close to it)
+/// - The coordinate system of MediaPipe world landmarks matches the VRM skeleton
+/// - Rotations are applied in world space
+///
+/// For production use, consider:
+/// - Storing and applying rotations relative to rest pose
+/// - Handling parent-child bone hierarchies properly
+/// - Using local-space rotations instead of world-space
 fn apply_bone_rotations(
     current_bone_rotations: Res<CurrentBoneRotations>,
     mut bone_query: Query<(&VrmBone, &mut Transform)>,
@@ -626,27 +642,26 @@ fn apply_bone_rotations(
         return;
     }
 
-    // Build a map from bone name to rotation
-    let mut rotation_map: HashMap<String, (Quat, f32)> = HashMap::new();
-    for bone_rot in current_bone_rotations.rotations.iter() {
-        // Convert glam::Quat to bevy::Quat
-        let bevy_quat = Quat::from_xyzw(
-            bone_rot.rotation.x,
-            bone_rot.rotation.y,
-            bone_rot.rotation.z,
-            bone_rot.rotation.w,
-        );
-        rotation_map.insert(bone_rot.bone_name.clone(), (bevy_quat, bone_rot.confidence));
-    }
-
     // Apply rotations to matching bone entities
     for (vrm_bone, mut transform) in bone_query.iter_mut() {
-        if let Some((rotation, confidence)) = rotation_map.get(&vrm_bone.bone_name) {
+        // Find rotation for this bone
+        if let Some(bone_rot) = current_bone_rotations
+            .rotations
+            .iter()
+            .find(|r| r.bone_name == vrm_bone.bone_name)
+        {
             // Only apply if confidence is above threshold
-            if *confidence > 0.5 {
+            if bone_rot.confidence > MIN_VISIBILITY_THRESHOLD {
+                // Convert glam::Quat to bevy::Quat
+                let bevy_quat = Quat::from_xyzw(
+                    bone_rot.rotation.x,
+                    bone_rot.rotation.y,
+                    bone_rot.rotation.z,
+                    bone_rot.rotation.w,
+                );
                 // Apply the rotation to the bone's transform
-                // We could also blend with the current rotation based on confidence
-                transform.rotation = *rotation;
+                // Note: This directly sets rotation, which may not account for rest pose
+                transform.rotation = bevy_quat;
             }
         }
     }
