@@ -921,7 +921,7 @@ dependencies = [
  "approx",
  "bevy_reflect",
  "derive_more",
- "glam",
+ "glam 0.30.9",
  "itertools 0.14.0",
  "libm",
  "rand",
@@ -1096,7 +1096,7 @@ dependencies = [
  "downcast-rs 2.0.2",
  "erased-serde",
  "foldhash 0.2.0",
- "glam",
+ "glam 0.30.9",
  "inventory",
  "petgraph",
  "serde",
@@ -2135,7 +2135,7 @@ checksum = "02ba239319a4f60905966390f5e52799d868103a533bb7e27822792332504ddd"
 dependencies = [
  "const_panic",
  "encase_derive",
- "glam",
+ "glam 0.30.9",
  "thiserror 2.0.17",
 ]
 
@@ -2450,6 +2450,12 @@ dependencies = [
 
 [[package]]
 name = "glam"
+version = "0.29.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
+
+[[package]]
+name = "glam"
 version = "0.30.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd47b05dddf0005d850e5644cae7f2b14ac3df487979dbfff3b56f20b1a6ae46"
@@ -2655,7 +2661,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29a164ceff4500f2a72b1d21beaa8aa8ad83aec2b641844c659b190cb3ea2e0b"
 dependencies = [
  "constgebra",
- "glam",
+ "glam 0.30.9",
  "tinyvec",
 ]
 
@@ -3678,6 +3684,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "pose_adapter"
+version = "0.1.0"
+dependencies = [
+ "glam 0.29.3",
 ]
 
 [[package]]
@@ -4733,6 +4746,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "expression_adapter",
+ "pose_adapter",
  "rfd",
  "serde",
  "toml",

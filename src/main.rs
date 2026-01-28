@@ -1,6 +1,7 @@
 use bevy::asset::io::{AssetSource, AssetSourceId};
 use bevy::prelude::*;
 use expression_adapter::{ArkitToVrmAdapter, BlendshapeToExpression, VrmExpression};
+use pose_adapter::{MediaPipePoseAdapter, PoseWorldLandmark, VrmBoneRotation};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -55,6 +56,18 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+/// Resource that stores the current bone rotations from pose tracking.
+#[derive(Resource, Default)]
+struct CurrentBoneRotations {
+    rotations: Vec<VrmBoneRotation>,
+}
+
+/// Component that marks a bone entity and stores its VRM bone name.
+#[derive(Component, Clone)]
+struct VrmBone {
+    bone_name: String,
+}
+
 // Key upper body landmark indices and names for logging
 const KEY_POSE_LANDMARKS: [usize; 7] = [0, 11, 12, 13, 14, 15, 16];
 const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
@@ -102,6 +115,7 @@ fn main() {
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
         .init_resource::<CurrentExpressions>()
+        .init_resource::<CurrentBoneRotations>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
@@ -112,7 +126,9 @@ fn main() {
                 receive_file_dialog_result,
                 load_vrm_from_path,
                 build_expression_maps,
+                tag_vrm_bones,
                 apply_expressions,
+                apply_bone_rotations,
             ),
         )
         .run();
@@ -136,6 +152,7 @@ fn setup_tracker(mut commands: Commands) {
 fn dump_tracker_frames(
     rx: Res<TrackerReceiver>,
     mut current_expressions: ResMut<CurrentExpressions>,
+    mut current_bone_rotations: ResMut<CurrentBoneRotations>,
 ) {
     let adapter = ArkitToVrmAdapter;
 
@@ -145,6 +162,26 @@ fn dump_tracker_frames(
 
         // Store expressions for the apply_expressions system to use
         current_expressions.expressions = vrm_expressions.clone();
+
+        // Convert pose world landmarks to bone rotations
+        if !frame.pose_world_landmarks.is_empty() {
+            // Convert tracker_ipc landmarks to pose_adapter landmarks
+            let pose_landmarks: Vec<PoseWorldLandmark> = frame
+                .pose_world_landmarks
+                .iter()
+                .map(|lm| PoseWorldLandmark {
+                    x: lm.x,
+                    y: lm.y,
+                    z: lm.z,
+                    visibility: lm.visibility,
+                })
+                .collect();
+
+            let bone_rotations = MediaPipePoseAdapter::landmarks_to_bone_rotations(&pose_landmarks);
+            current_bone_rotations.rotations = bone_rotations;
+        } else {
+            current_bone_rotations.rotations.clear();
+        }
 
         // Print the converted expressions
         if !vrm_expressions.is_empty() {
@@ -490,5 +527,127 @@ fn apply_expressions(
 
         // Update the morph weights
         morph_weights.weights_mut().copy_from_slice(&new_weights);
+    }
+}
+
+/// System that tags VRM bone entities with their bone names.
+///
+/// This system runs after a VRM scene is spawned and tags bone entities
+/// based on the humanoid bone mapping in the VRM asset.
+#[allow(clippy::type_complexity)]
+fn tag_vrm_bones(
+    mut commands: Commands,
+    vrm_assets: Res<Assets<VrmAsset>>,
+    gltf_assets: Res<Assets<bevy::gltf::Gltf>>,
+    vrm_entities: Query<(&VrmHandle, &Children), (With<CurrentVrmEntity>, Without<VrmBone>)>,
+    children_query: Query<&Children>,
+    name_query: Query<&Name>,
+) {
+    for (vrm_handle, children) in vrm_entities.iter() {
+        let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
+            continue;
+        };
+
+        let Some(gltf) = gltf_assets.get(&vrm_asset.gltf) else {
+            continue;
+        };
+
+        let Some(humanoid) = &vrm_asset.humanoid else {
+            continue;
+        };
+
+        // Get the scene root entity
+        let Some(_scene_handle) = gltf.scenes.first() else {
+            continue;
+        };
+
+        // Collect all entities in the scene hierarchy
+        let mut all_entities = Vec::new();
+        collect_all_entities(children, &children_query, &mut all_entities);
+
+        // Tag bone entities based on humanoid mapping
+        for (bone_name, _bone_data) in humanoid.human_bones.iter() {
+            // Find entity matching the node index
+            // Note: In glTF, nodes are indexed in the order they appear in the glTF file
+            // We need to find the entity by walking the hierarchy and matching by name
+
+            // For now, we'll use a simple name-based matching approach
+            // Try to find entities with names that match VRM bone names
+            for &entity in &all_entities {
+                if let Ok(name) = name_query.get(entity) {
+                    // Check if this entity might be the bone we're looking for
+                    // This is a heuristic approach - in a more robust implementation,
+                    // we would use the glTF node index from bone_data.node
+                    let name_str = name.as_str().to_lowercase();
+                    let bone_lower = bone_name.to_lowercase();
+
+                    if name_str.contains(&bone_lower) {
+                        commands.entity(entity).insert(VrmBone {
+                            bone_name: bone_name.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        info!(
+            "Tagged VRM bones for model: {} ({} bone mappings)",
+            vrm_asset.meta.name,
+            humanoid.human_bones.len()
+        );
+    }
+}
+
+/// Helper function to collect all entities from the scene hierarchy
+fn collect_all_entities(
+    children: &Children,
+    children_query: &Query<&Children>,
+    all_entities: &mut Vec<Entity>,
+) {
+    for child in children.iter() {
+        all_entities.push(child);
+
+        // Recursively collect children
+        if let Ok(grandchildren) = children_query.get(child) {
+            collect_all_entities(grandchildren, children_query, all_entities);
+        }
+    }
+}
+
+/// System that applies bone rotations from pose tracking to VRM bones.
+///
+/// This system takes the current bone rotations from pose tracking and applies
+/// them to the bone entities' Transform components.
+fn apply_bone_rotations(
+    current_bone_rotations: Res<CurrentBoneRotations>,
+    mut bone_query: Query<(&VrmBone, &mut Transform)>,
+) {
+    if current_bone_rotations.rotations.is_empty() {
+        return;
+    }
+
+    // Build a map from bone name to rotation
+    let mut rotation_map: HashMap<String, (Quat, f32)> = HashMap::new();
+    for bone_rot in current_bone_rotations.rotations.iter() {
+        // Convert glam::Quat to bevy::Quat
+        let bevy_quat = Quat::from_xyzw(
+            bone_rot.rotation.x,
+            bone_rot.rotation.y,
+            bone_rot.rotation.z,
+            bone_rot.rotation.w,
+        );
+        rotation_map.insert(bone_rot.bone_name.clone(), (bevy_quat, bone_rot.confidence));
+    }
+
+    // Apply rotations to matching bone entities
+    for (vrm_bone, mut transform) in bone_query.iter_mut() {
+        if let Some((rotation, confidence)) = rotation_map.get(&vrm_bone.bone_name) {
+            // Only apply if confidence is above threshold
+            if *confidence > 0.5 {
+                // Apply the rotation to the bone's transform
+                // We could also blend with the current rotation based on confidence
+                transform.rotation = *rotation;
+            }
+        }
     }
 }
