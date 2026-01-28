@@ -7,31 +7,49 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-# Path to the MediaPipe model file
+# Path to the MediaPipe model files
 # Download from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
-MODEL_PATH = "tools/face_landmarker.task"
+FACE_MODEL_PATH = "tools/face_landmarker.task"
+# Download from: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task
+POSE_MODEL_PATH = "tools/pose_landmarker_full.task"
 
 # Maximum consecutive frame read failures before exiting
 MAX_FRAME_FAILURES = 30
 
 def main():
-    # Check if model file exists
-    if not os.path.exists(MODEL_PATH):
+    # Check if face model file exists
+    if not os.path.exists(FACE_MODEL_PATH):
         print(json.dumps({
-            "error": f"Model file not found at {MODEL_PATH}. Please download it from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+            "error": f"Face model file not found at {FACE_MODEL_PATH}. Please download it from: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+        }), file=sys.stderr, flush=True)
+        sys.exit(1)
+    
+    # Check if pose model file exists
+    if not os.path.exists(POSE_MODEL_PATH):
+        print(json.dumps({
+            "error": f"Pose model file not found at {POSE_MODEL_PATH}. Please download it from: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
         }), file=sys.stderr, flush=True)
         sys.exit(1)
     
     # Initialize MediaPipe Face Landmarker
-    base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
-    options = vision.FaceLandmarkerOptions(
-        base_options=base_options,
+    face_base_options = python.BaseOptions(model_asset_path=FACE_MODEL_PATH)
+    face_options = vision.FaceLandmarkerOptions(
+        base_options=face_base_options,
         output_face_blendshapes=True,
         running_mode=vision.RunningMode.VIDEO,
         num_faces=1
     )
     
-    landmarker = vision.FaceLandmarker.create_from_options(options)
+    face_landmarker = vision.FaceLandmarker.create_from_options(face_options)
+    
+    # Initialize MediaPipe Pose Landmarker
+    pose_base_options = python.BaseOptions(model_asset_path=POSE_MODEL_PATH)
+    pose_options = vision.PoseLandmarkerOptions(
+        base_options=pose_base_options,
+        running_mode=vision.RunningMode.VIDEO
+    )
+    
+    pose_landmarker = vision.PoseLandmarker.create_from_options(pose_options)
     
     # Open webcam
     cap = cv2.VideoCapture(0)
@@ -70,18 +88,47 @@ def main():
             timestamp_ms = frame_count
             
             # Detect face landmarks and blendshapes
-            result = landmarker.detect_for_video(mp_image, timestamp_ms)
+            face_result = face_landmarker.detect_for_video(mp_image, timestamp_ms)
             
             # Extract blendshapes
             blendshapes = {}
-            if result.face_blendshapes and len(result.face_blendshapes) > 0:
-                for blendshape in result.face_blendshapes[0]:
+            if face_result.face_blendshapes and len(face_result.face_blendshapes) > 0:
+                for blendshape in face_result.face_blendshapes[0]:
                     blendshapes[blendshape.category_name] = blendshape.score
+            
+            # Detect pose landmarks
+            pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
+            
+            # Extract pose landmarks (33 3D landmarks in image coordinates)
+            pose_landmarks = []
+            if pose_result.pose_landmarks and len(pose_result.pose_landmarks) > 0:
+                for landmark in pose_result.pose_landmarks[0]:
+                    pose_landmarks.append({
+                        "x": landmark.x,
+                        "y": landmark.y,
+                        "z": landmark.z,
+                        "visibility": landmark.visibility,
+                        "presence": landmark.presence
+                    })
+            
+            # Extract pose world landmarks (33 3D landmarks in real-world coordinates)
+            pose_world_landmarks = []
+            if pose_result.pose_world_landmarks and len(pose_result.pose_world_landmarks) > 0:
+                for landmark in pose_result.pose_world_landmarks[0]:
+                    pose_world_landmarks.append({
+                        "x": landmark.x,
+                        "y": landmark.y,
+                        "z": landmark.z,
+                        "visibility": landmark.visibility,
+                        "presence": landmark.presence
+                    })
             
             # Output frame data in the expected format
             output = {
                 "ts": time.time(),
-                "blendshapes": blendshapes
+                "blendshapes": blendshapes,
+                "pose_landmarks": pose_landmarks,
+                "pose_world_landmarks": pose_world_landmarks
             }
             
             print(json.dumps(output), flush=True)
@@ -92,7 +139,8 @@ def main():
         pass
     finally:
         cap.release()
-        landmarker.close()
+        face_landmarker.close()
+        pose_landmarker.close()
 
 if __name__ == "__main__":
     main()

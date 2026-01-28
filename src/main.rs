@@ -55,6 +55,18 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+// Key upper body landmark indices and names for logging
+const KEY_POSE_LANDMARKS: [usize; 7] = [0, 11, 12, 13, 14, 15, 16];
+const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+];
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -146,6 +158,50 @@ fn dump_tracker_frames(
                 frame.ts,
                 expr_summary.join(", ")
             );
+        }
+
+        // Print pose landmark information if available
+        if !frame.pose_landmarks.is_empty() {
+            let pose_summary: Vec<String> = KEY_POSE_LANDMARKS
+                .iter()
+                .zip(KEY_POSE_LANDMARK_NAMES.iter())
+                .filter_map(|(&idx, &name)| {
+                    frame.pose_landmarks.get(idx).map(|lm| {
+                        format!(
+                            "{}=({:.2},{:.2},{:.2},v={:.2})",
+                            name, lm.x, lm.y, lm.z, lm.visibility
+                        )
+                    })
+                })
+                .collect();
+
+            if !pose_summary.is_empty() {
+                println!("ts={:.3} pose=[{}]", frame.ts, pose_summary.join(", "));
+            }
+        }
+
+        // Print pose world landmarks if available
+        if !frame.pose_world_landmarks.is_empty() {
+            let world_summary: Vec<String> = KEY_POSE_LANDMARKS
+                .iter()
+                .zip(KEY_POSE_LANDMARK_NAMES.iter())
+                .filter_map(|(&idx, &name)| {
+                    frame.pose_world_landmarks.get(idx).map(|lm| {
+                        format!(
+                            "{}=({:.3},{:.3},{:.3}m,v={:.2})",
+                            name, lm.x, lm.y, lm.z, lm.visibility
+                        )
+                    })
+                })
+                .collect();
+
+            if !world_summary.is_empty() {
+                println!(
+                    "ts={:.3} pose_world=[{}]",
+                    frame.ts,
+                    world_summary.join(", ")
+                );
+            }
         }
     }
 }
