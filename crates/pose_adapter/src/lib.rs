@@ -70,6 +70,16 @@ impl PoseWorldLandmark {
     pub fn to_vec3(&self) -> Vec3 {
         Vec3::new(self.x, self.y, self.z)
     }
+
+    /// Convert MediaPipe world coordinates to VRM coordinates
+    ///
+    /// MediaPipe uses: X right, Y down, Z away from person (toward camera)
+    /// VRM uses: X right, Y up, Z toward viewer
+    ///
+    /// This converts by: flipping Y (negate), flipping Z (negate)
+    pub fn to_vrm_coords(&self) -> Vec3 {
+        Vec3::new(self.x, -self.y, -self.z)
+    }
 }
 
 /// Represents a bone rotation for a VRM humanoid bone
@@ -147,7 +157,7 @@ impl MediaPipePoseAdapter {
             return None;
         }
 
-        let bone_vec = elbow.to_vec3() - shoulder.to_vec3();
+        let bone_vec = elbow.to_vrm_coords() - shoulder.to_vrm_coords();
         // Check for degenerate case (landmarks too close together)
         if bone_vec.length_squared() < 1e-6 {
             return None;
@@ -174,7 +184,7 @@ impl MediaPipePoseAdapter {
             return None;
         }
 
-        let bone_vec = wrist.to_vec3() - elbow.to_vec3();
+        let bone_vec = wrist.to_vrm_coords() - elbow.to_vrm_coords();
         if bone_vec.length_squared() < 1e-6 {
             return None;
         }
@@ -201,7 +211,7 @@ impl MediaPipePoseAdapter {
             return None;
         }
 
-        let bone_vec = elbow.to_vec3() - shoulder.to_vec3();
+        let bone_vec = elbow.to_vrm_coords() - shoulder.to_vrm_coords();
         if bone_vec.length_squared() < 1e-6 {
             return None;
         }
@@ -229,7 +239,7 @@ impl MediaPipePoseAdapter {
             return None;
         }
 
-        let bone_vec = wrist.to_vec3() - elbow.to_vec3();
+        let bone_vec = wrist.to_vrm_coords() - elbow.to_vrm_coords();
         if bone_vec.length_squared() < 1e-6 {
             return None;
         }
@@ -255,7 +265,7 @@ impl MediaPipePoseAdapter {
         }
 
         // Compute the shoulder line direction
-        let shoulder_vec = right_shoulder.to_vec3() - left_shoulder.to_vec3();
+        let shoulder_vec = right_shoulder.to_vrm_coords() - left_shoulder.to_vrm_coords();
         if shoulder_vec.length_squared() < 1e-6 {
             return None;
         }
