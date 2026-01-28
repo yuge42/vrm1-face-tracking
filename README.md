@@ -9,8 +9,14 @@ Real-time face and upper body tracking for VRM models using MediaPipe Face Landm
 - **User Data Directory**: VRM models are stored in platform-specific user data directories
 - **Configuration**: Application configuration stored in platform-specific config directory
 - **Real-time Face Tracking**: Capture face tracking data using MediaPipe Face Landmarker
+  - Maps ARKit-style blendshapes to VRM expressions
+  - Supports all VRM 1.0 expression presets (emotions, lip sync, blink, gaze)
 - **Real-time Pose Tracking**: Capture upper body pose data using MediaPipe Pose Landmarker
+  - Applies world coordinates to VRM bone rotations
+  - Supports upper body bones: shoulders, elbows, wrists, and chest
+  - Confidence-based filtering for stable tracking
 - **Expression Adapter**: Flexible trait-based system for mapping tracker blendshapes to VRM expressions
+- **Pose Adapter**: Converts MediaPipe 3D pose landmarks to VRM humanoid bone rotations
 - **3D Rendering**: Display VRM models with proper lighting and camera setup
 
 ## Setup
@@ -133,6 +139,25 @@ The system supports all VRM 1.0 expression presets:
 - **Other**: `neutral`
 
 For more details on the expression adapter system, see [crates/expression_adapter/README.md](crates/expression_adapter/README.md).
+
+### Pose Adapter System
+
+The application includes a pose adapter that converts MediaPipe Pose Landmarker data into VRM bone rotations:
+
+- **MediaPipe Pose Landmarker** outputs 33 3D landmarks in world coordinates (meters)
+- **PoseAdapter** converts landmarks to bone rotations for VRM humanoid bones
+- **Bone Rotation System** applies calculated rotations to VRM bone Transform components
+
+#### Supported Bones
+
+The pose adapter currently supports upper body tracking:
+
+- **Arms**: `leftUpperArm`, `leftLowerArm`, `rightUpperArm`, `rightLowerArm`
+- **Torso**: `chest`
+
+The system uses world coordinates for accurate 3D positioning and includes confidence-based filtering to ensure stable tracking. Only landmarks with visibility > 0.5 are used for bone rotation calculations.
+
+For more details on the pose adapter, see [crates/pose_adapter/README.md](crates/pose_adapter/README.md).
 
 ## Environment Variables
 

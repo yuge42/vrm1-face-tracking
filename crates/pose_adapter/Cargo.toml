@@ -1,0 +1,12 @@
+[package]
+name = "pose_adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Adapter for mapping MediaPipe pose landmarks to VRM bone transforms"
+
+[dependencies]
+glam = "0.29"
