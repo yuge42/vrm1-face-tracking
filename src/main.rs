@@ -69,6 +69,8 @@ struct CurrentBoneRotations {
 #[derive(Component, Clone)]
 struct VrmBone {
     bone_name: String,
+    /// Rest pose rotation (local rotation when the bone was first tagged)
+    rest_rotation: Quat,
 }
 
 // Key upper body landmark indices and names for logging
@@ -545,6 +547,7 @@ fn tag_vrm_bones(
     vrm_entities: Query<(&VrmHandle, &Children), (With<CurrentVrmEntity>, Without<VrmBone>)>,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
+    transform_query: Query<&Transform>,
 ) {
     for (vrm_handle, children) in vrm_entities.iter() {
         let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
@@ -585,9 +588,16 @@ fn tag_vrm_bones(
                     // Exact match or contains the bone name
                     // Avoid tagging the same entity multiple times by checking if it already has VrmBone
                     if name_str == bone_lower || name_str.contains(&bone_lower) {
+                        // Get the rest pose rotation (current rotation at tagging time)
+                        let rest_rotation = transform_query
+                            .get(entity)
+                            .map(|t| t.rotation)
+                            .unwrap_or(Quat::IDENTITY);
+
                         // Only tag if not already tagged
                         commands.entity(entity).try_insert(VrmBone {
                             bone_name: bone_name.clone(),
+                            rest_rotation,
                         });
                         // Break to avoid tagging multiple entities with the same bone name
                         break;
@@ -623,17 +633,11 @@ fn collect_all_entities(
 /// System that applies bone rotations from pose tracking to VRM bones.
 ///
 /// This system takes the current bone rotations from pose tracking and applies
-/// them to the bone entities' Transform components.
+/// them to the bone entities' Transform components **relative to the rest pose**.
 ///
-/// **Note**: This implementation directly sets the bone rotation, which assumes:
-/// - Bones are in T-pose initially (or close to it)
-/// - The coordinate system of MediaPipe world landmarks matches the VRM skeleton
-/// - Rotations are applied in world space
-///
-/// For production use, consider:
-/// - Storing and applying rotations relative to rest pose
-/// - Handling parent-child bone hierarchies properly
-/// - Using local-space rotations instead of world-space
+/// The tracked rotations are computed from T-pose to the current pose, so we need to:
+/// 1. Start with the bone's rest pose rotation
+/// 2. Apply the tracked rotation on top of it
 fn apply_bone_rotations(
     current_bone_rotations: Res<CurrentBoneRotations>,
     mut bone_query: Query<(&VrmBone, &mut Transform)>,
@@ -653,15 +657,16 @@ fn apply_bone_rotations(
             // Only apply if confidence is above threshold
             if bone_rot.confidence > MIN_VISIBILITY_THRESHOLD {
                 // Convert glam::Quat to bevy::Quat
-                let bevy_quat = Quat::from_xyzw(
+                let tracked_quat = Quat::from_xyzw(
                     bone_rot.rotation.x,
                     bone_rot.rotation.y,
                     bone_rot.rotation.z,
                     bone_rot.rotation.w,
                 );
-                // Apply the rotation to the bone's transform
-                // Note: This directly sets rotation, which may not account for rest pose
-                transform.rotation = bevy_quat;
+
+                // Apply the tracked rotation relative to the rest pose
+                // rest_rotation * tracked_rotation gives us the final rotation
+                transform.rotation = vrm_bone.rest_rotation * tracked_quat;
             }
         }
     }
