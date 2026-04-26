@@ -97,8 +97,14 @@ The application configuration is stored in `config.toml` in your platform-specif
 
 - `user_vrm_dir`: Path to the directory where VRM models are stored
 - `default_vrm_model`: Filename of the default VRM model to load on startup
+- `camera_device_id`: Camera device ID to use for tracking (default: 0)
 
 The configuration file is created automatically with sensible defaults when you first run the application. You can edit it manually if needed.
+
+**Note**: If you have multiple cameras, you can change the `camera_device_id` in the config file to use a different camera. For example:
+```toml
+camera_device_id = 1
+```
 
 ## Architecture
 

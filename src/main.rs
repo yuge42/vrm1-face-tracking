@@ -139,19 +139,26 @@ fn main() {
         .run();
 }
 
-fn setup_tracker(mut commands: Commands) {
+fn setup_tracker(mut commands: Commands, config: Res<Config>) {
     // Use PYTHON_BIN environment variable if set, otherwise default to "python3"
     let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python3".to_string());
+
+    // Pass camera device ID as argument
+    let args = vec![format!("--camera={}", config.inner.camera_device_id)];
 
     let (child, rx) = spawn_tracker(
         &python_bin,
         "tools/mediapipe_tracker.py", // Relative Path
+        &args,
     );
 
     commands.insert_resource(TrackerReceiver { rx });
     commands.insert_resource(TrackerProcess { child });
 
-    println!("Tracker process started with Python: {python_bin}");
+    println!(
+        "Tracker process started with Python: {python_bin}, camera device: {}",
+        config.inner.camera_device_id
+    );
 }
 
 fn dump_tracker_frames(

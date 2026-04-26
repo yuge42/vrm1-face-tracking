@@ -54,10 +54,19 @@ To test the tracker manually:
 ```bash
 # From the project root, make sure virtual environment is activated
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+
+# Use default camera (device 0)
 python tools/mediapipe_tracker.py
+
+# Use a specific camera device
+python tools/mediapipe_tracker.py --camera=1
 ```
 
 Make sure you have a webcam connected and both model files downloaded.
+
+### Command Line Arguments
+
+- `--camera`: Camera device ID (default: 0). Use this to select a specific camera if you have multiple cameras connected.
 
 ## Output Format
 

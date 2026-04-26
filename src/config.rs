@@ -9,6 +9,9 @@ pub struct AppConfig {
     pub user_vrm_dir: PathBuf,
     /// Default VRM model filename in user directory
     pub default_vrm_model: String,
+    /// Camera device ID (default: 0)
+    #[serde(default)]
+    pub camera_device_id: u32,
 }
 
 impl Default for AppConfig {
@@ -17,6 +20,7 @@ impl Default for AppConfig {
         Self {
             user_vrm_dir,
             default_vrm_model: "model.vrm".to_string(),
+            camera_device_id: 0,
         }
     }
 }
