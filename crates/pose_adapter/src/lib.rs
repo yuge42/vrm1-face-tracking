@@ -137,10 +137,15 @@ impl MediaPipePoseAdapter {
             rotations.push(rotation);
         }
 
-        // Spine/chest rotation based on shoulders
-        if let Some(rotation) = Self::compute_chest_rotation(landmarks) {
-            rotations.push(rotation);
-        }
+        // NOTE: Chest/spine rotation is disabled because it conflicts with arm rotations
+        // when both are calculated in world space but applied as local rotations.
+        // This causes the body to twist and rotate continuously.
+        // A proper fix would require calculating rotations in local space relative to
+        // parent bones, which is more complex.
+        //
+        // if let Some(rotation) = Self::compute_chest_rotation(landmarks) {
+        //     rotations.push(rotation);
+        // }
 
         rotations
     }
@@ -254,6 +259,10 @@ impl MediaPipePoseAdapter {
     }
 
     /// Compute rotation for chest/upper body based on shoulder orientation
+    ///
+    /// NOTE: Currently disabled due to conflicts with arm rotations in world/local space mixing.
+    /// See comments in landmarks_to_bone_rotations for details.
+    #[allow(dead_code)]
     fn compute_chest_rotation(landmarks: &[PoseWorldLandmark]) -> Option<VrmBoneRotation> {
         let left_shoulder = landmarks[PoseLandmarkIndex::LeftShoulder as usize];
         let right_shoulder = landmarks[PoseLandmarkIndex::RightShoulder as usize];
