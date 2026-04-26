@@ -6,7 +6,10 @@
 use glam::{Quat, Vec3};
 
 /// Minimum visibility threshold for using a landmark in bone rotation calculations
-const MIN_VISIBILITY_THRESHOLD: f32 = 0.5;
+/// Set to 0.05 to be very permissive and work with low-quality tracking scenarios.
+/// MediaPipe visibility scores can be quite low even when tracking provides
+/// useful directional information.
+const MIN_VISIBILITY_THRESHOLD: f32 = 0.05;
 
 /// MediaPipe pose landmark indices (33 total)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

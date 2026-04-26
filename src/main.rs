@@ -12,7 +12,10 @@ mod config;
 use config::AppConfig;
 
 /// Minimum visibility threshold for applying bone rotations
-const MIN_VISIBILITY_THRESHOLD: f32 = 0.5;
+/// Set to 0.05 to be very permissive and work with low-quality tracking scenarios.
+/// MediaPipe visibility scores can be quite low even when tracking provides
+/// useful directional information.
+const MIN_VISIBILITY_THRESHOLD: f32 = 0.05;
 
 #[derive(Resource)]
 struct TrackerReceiver {
