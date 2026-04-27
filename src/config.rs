@@ -9,6 +9,9 @@ pub struct AppConfig {
     pub user_vrm_dir: PathBuf,
     /// Default VRM model filename in user directory
     pub default_vrm_model: String,
+    /// Video device index to use for face tracking (default: 0)
+    #[serde(default)]
+    pub camera_device_id: u32,
 }
 
 impl Default for AppConfig {
@@ -17,6 +20,7 @@ impl Default for AppConfig {
         Self {
             user_vrm_dir,
             default_vrm_model: "model.vrm".to_string(),
+            camera_device_id: 0,
         }
     }
 }
@@ -88,5 +92,6 @@ mod tests {
         let config = AppConfig::default();
         assert_eq!(config.default_vrm_model, "model.vrm");
         assert!(!config.user_vrm_dir.as_os_str().is_empty());
+        assert_eq!(config.camera_device_id, 0);
     }
 }
