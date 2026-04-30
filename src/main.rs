@@ -55,6 +55,19 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+/// Resource that stores the body position derived from shoulder world landmarks.
+///
+/// The midpoint of the two shoulder world landmarks is used to translate the
+/// VRM root entity so that the model tracks the subject's real-world torso
+/// movement.
+#[derive(Resource, Default)]
+struct CurrentShoulderPosition {
+    /// World-space midpoint of the two shoulders in MediaPipe coordinates.
+    /// Origin is at the hip centre; Y is up; X is to the person's right;
+    /// Z is toward the camera.  Units are meters.
+    midpoint: Option<Vec3>,
+}
+
 // Key upper body landmark indices and names for logging
 const KEY_POSE_LANDMARKS: [usize; 7] = [0, 11, 12, 13, 14, 15, 16];
 const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
@@ -66,6 +79,63 @@ const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
     "left_wrist",
     "right_wrist",
 ];
+
+/// Index of the left shoulder in MediaPipe's 33-landmark pose array
+const LEFT_SHOULDER_IDX: usize = 11;
+/// Index of the right shoulder in MediaPipe's 33-landmark pose array
+const RIGHT_SHOULDER_IDX: usize = 12;
+/// Minimum visibility score for a shoulder landmark to be considered reliable
+const SHOULDER_VISIBILITY_THRESHOLD: f32 = 0.1;
+/// Vertical offset (in meters) added to the shoulder world-space Y to obtain the
+/// VRM root (feet) Y in Bevy world space.
+///
+/// MediaPipe world landmarks have their origin at the hip centre, so shoulders
+/// sit at approximately +0.4 m.  A typical VRM model has shoulders at roughly
+/// 1.4 m above its root (feet).  The hip centre is approximately 1.0 m above
+/// the floor, so:
+///
+///   vrm_root_y = hip_floor_offset + shoulder_world_y - shoulder_height_from_feet
+///             ≈ 1.0 + shoulder_world_y - 1.4
+///             = shoulder_world_y - 0.4
+const SHOULDER_Y_OFFSET: f32 = -0.4;
+
+// ---------------------------------------------------------------------------
+// Body movement direction / scale controls
+//
+// Each axis can be independently:
+//   • flipped  – change 1.0 → -1.0 to invert that direction
+//   • scaled   – multiply by a value other than 1.0 to amplify / dampen movement
+//
+// Defaults reproduce a 1-to-1 mapping from MediaPipe world coordinates to
+// Bevy world coordinates with no inversion.
+// ---------------------------------------------------------------------------
+
+/// Sign multiplier for left-right (X) body translation.
+/// 1.0  = natural (MediaPipe X is already "person's right", same as Bevy X)
+/// -1.0 = mirror / flip left↔right
+const BODY_X_SIGN: f32 = -1.0;
+
+/// Scale factor for left-right (X) body translation.
+/// Increase above 1.0 to amplify horizontal movement; decrease toward 0.0 to dampen it.
+const BODY_X_SCALE: f32 = 1.0;
+
+/// Sign multiplier for up-down (Y) body translation.
+/// 1.0  = natural (up in MediaPipe = up in Bevy)
+/// -1.0 = flip up↔down
+const BODY_Y_SIGN: f32 = 1.0;
+
+/// Scale factor for up-down (Y) body translation.
+/// Increase above 1.0 to amplify vertical movement; decrease toward 0.0 to dampen it.
+const BODY_Y_SCALE: f32 = 1.0;
+
+/// Sign multiplier for forward-backward (Z) body translation.
+/// 1.0  = natural (toward-camera in MediaPipe = toward-viewer in Bevy)
+/// -1.0 = flip forward↔backward
+const BODY_Z_SIGN: f32 = -1.0;
+
+/// Scale factor for forward-backward (Z) body translation.
+/// Increase above 1.0 to amplify depth movement; decrease toward 0.0 to dampen it.
+const BODY_Z_SCALE: f32 = 1.0;
 
 fn main() {
     // Load or create configuration
@@ -102,6 +172,7 @@ fn main() {
         .insert_resource(Config { inner: config })
         .init_resource::<VrmModelPath>()
         .init_resource::<CurrentExpressions>()
+        .init_resource::<CurrentShoulderPosition>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
@@ -113,6 +184,7 @@ fn main() {
                 load_vrm_from_path,
                 build_expression_maps,
                 apply_expressions,
+                apply_body_position,
             ),
         )
         .run();
@@ -139,6 +211,7 @@ fn setup_tracker(mut commands: Commands, config: Res<Config>) {
 fn dump_tracker_frames(
     rx: Res<TrackerReceiver>,
     mut current_expressions: ResMut<CurrentExpressions>,
+    mut shoulder_pos: ResMut<CurrentShoulderPosition>,
 ) {
     let adapter = ArkitToVrmAdapter;
 
@@ -206,6 +279,23 @@ fn dump_tracker_frames(
                 );
             }
         }
+
+        // Update body position from shoulder world landmarks.
+        // Shoulder indices: 11 = left shoulder, 12 = right shoulder.
+        if frame.pose_world_landmarks.len() > RIGHT_SHOULDER_IDX {
+            let left = &frame.pose_world_landmarks[LEFT_SHOULDER_IDX];
+            let right = &frame.pose_world_landmarks[RIGHT_SHOULDER_IDX];
+
+            if left.visibility >= SHOULDER_VISIBILITY_THRESHOLD
+                && right.visibility >= SHOULDER_VISIBILITY_THRESHOLD
+            {
+                shoulder_pos.midpoint = Some(Vec3::new(
+                    (left.x + right.x) * 0.5,
+                    (left.y + right.y) * 0.5,
+                    (left.z + right.z) * 0.5,
+                ));
+            }
+        }
     }
 }
 
@@ -213,7 +303,7 @@ fn setup_scene(mut commands: Commands, config: Res<Config>) {
     // Spawn camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 1.3, 1.5).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, 0.8, 1.5).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
     ));
 
     // Spawn directional light
@@ -347,7 +437,11 @@ fn load_vrm_from_path(
         let asset_path = format!("userdata://{}", file_name.to_string_lossy());
         println!("Loading VRM model from user data: {asset_path}");
         let vrm_handle: Handle<VrmAsset> = asset_server.load(&asset_path);
-        commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity));
+        commands.spawn((
+            VrmHandle(vrm_handle),
+            CurrentVrmEntity,
+            Transform::default(),
+        ));
     }
 }
 
@@ -493,5 +587,35 @@ fn apply_expressions(
 
         // Update the morph weights
         morph_weights.weights_mut().copy_from_slice(&new_weights);
+    }
+}
+
+/// System that translates the VRM root entity based on shoulder world landmarks.
+///
+/// The midpoint of the two shoulder world landmarks (MediaPipe indices 11 & 12)
+/// is used to compute where the model's root (feet) should be placed in Bevy
+/// world space, so that the model tracks the subject's real-world torso position.
+///
+/// Each axis is multiplied by its sign constant (`BODY_*_SIGN`) and scale constant
+/// (`BODY_*_SCALE`) so movement can be flipped or amplified by editing those values.
+///
+/// Coordinate mapping (with default signs/scales of ±1.0 / 1.0):
+/// - MediaPipe world X (person's right) → Bevy world X
+/// - MediaPipe world Y (up, origin at hip centre) → Bevy world Y with `SHOULDER_Y_OFFSET`
+/// - MediaPipe world Z (toward camera) → Bevy world Z
+fn apply_body_position(
+    shoulder_pos: Res<CurrentShoulderPosition>,
+    mut vrm_query: Query<&mut Transform, With<CurrentVrmEntity>>,
+) {
+    let Some(midpoint) = shoulder_pos.midpoint else {
+        return;
+    };
+
+    for mut transform in vrm_query.iter_mut() {
+        transform.translation = Vec3::new(
+            midpoint.x * BODY_X_SIGN * BODY_X_SCALE,
+            (midpoint.y + SHOULDER_Y_OFFSET) * BODY_Y_SIGN * BODY_Y_SCALE,
+            midpoint.z * BODY_Z_SIGN * BODY_Z_SCALE,
+        );
     }
 }
