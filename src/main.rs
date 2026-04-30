@@ -68,6 +68,49 @@ struct CurrentShoulderPosition {
     midpoint: Option<Vec3>,
 }
 
+/// Resource that tracks the position of the head (nose pose landmark) relative
+/// to the shoulder midpoint.
+///
+/// On the first valid frame the current offset is recorded as the neutral
+/// (rest) position.  Subsequent frames compute a delta from that neutral so
+/// that only head movement relative to the resting pose is applied to the VRM
+/// head bone.
+#[derive(Resource, Default)]
+struct CurrentHeadOffset {
+    /// Current offset of the nose world landmark from the shoulder midpoint.
+    current: Option<Vec3>,
+    /// Neutral/rest offset captured on the first valid frame.
+    neutral: Option<Vec3>,
+}
+
+impl CurrentHeadOffset {
+    /// Returns the displacement of the head from its neutral position.
+    ///
+    /// Returns `None` until at least one valid frame has been received.
+    fn delta(&self) -> Option<Vec3> {
+        match (self.current, self.neutral) {
+            (Some(cur), Some(neu)) => Some(cur - neu),
+            _ => None,
+        }
+    }
+}
+
+/// Component that marks the Bevy entity corresponding to the VRM head bone.
+///
+/// The `rest_translation` field stores the head bone's local-space translation
+/// in the model's bind/rest pose so that the applied head-position delta is
+/// always added on top of the correct base position.
+#[derive(Component)]
+struct VrmHeadBone {
+    rest_translation: Vec3,
+}
+
+/// Marker component added to the VRM root entity once its head bone has been
+/// located and tagged with [`VrmHeadBone`].  Prevents repeated searches every
+/// frame after the bone has already been found.
+#[derive(Component)]
+struct HeadBoneTagged;
+
 // Key upper body landmark indices and names for logging
 const KEY_POSE_LANDMARKS: [usize; 7] = [0, 11, 12, 13, 14, 15, 16];
 const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
@@ -80,6 +123,13 @@ const KEY_POSE_LANDMARK_NAMES: [&str; 7] = [
     "right_wrist",
 ];
 
+/// Index of the nose in MediaPipe's 33-landmark pose array (used as a proxy
+/// for head position in world space).
+const NOSE_IDX: usize = 0;
+/// Minimum visibility score for the nose landmark to be considered reliable.
+/// Below this threshold the landmark is treated as absent and head-offset
+/// computation is skipped for that frame.
+const NOSE_VISIBILITY_THRESHOLD: f32 = 0.1;
 /// Index of the left shoulder in MediaPipe's 33-landmark pose array
 const LEFT_SHOULDER_IDX: usize = 11;
 /// Index of the right shoulder in MediaPipe's 33-landmark pose array
@@ -137,6 +187,34 @@ const BODY_Z_SIGN: f32 = -1.0;
 /// Increase above 1.0 to amplify depth movement; decrease toward 0.0 to dampen it.
 const BODY_Z_SCALE: f32 = 1.0;
 
+// ---------------------------------------------------------------------------
+// Head bone translation direction / scale controls
+//
+// Applied to the delta of the nose-world-landmark relative to the neutral
+// (first-frame) head-to-shoulder offset.  Uses the same sign conventions as
+// the body controls so the head tracks consistently with the body.
+// ---------------------------------------------------------------------------
+
+/// Sign multiplier for left-right (X) head translation.
+/// -1.0 mirrors MediaPipe X into Bevy X, matching `BODY_X_SIGN`.
+const HEAD_X_SIGN: f32 = -1.0;
+
+/// Scale factor for left-right (X) head translation.
+const HEAD_X_SCALE: f32 = 1.0;
+
+/// Sign multiplier for up-down (Y) head translation.
+const HEAD_Y_SIGN: f32 = 1.0;
+
+/// Scale factor for up-down (Y) head translation.
+const HEAD_Y_SCALE: f32 = 1.0;
+
+/// Sign multiplier for forward-backward (Z) head translation.
+/// -1.0 maps MediaPipe Z (toward camera) to Bevy -Z, matching `BODY_Z_SIGN`.
+const HEAD_Z_SIGN: f32 = -1.0;
+
+/// Scale factor for forward-backward (Z) head translation.
+const HEAD_Z_SCALE: f32 = 1.0;
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -173,6 +251,7 @@ fn main() {
         .init_resource::<VrmModelPath>()
         .init_resource::<CurrentExpressions>()
         .init_resource::<CurrentShoulderPosition>()
+        .init_resource::<CurrentHeadOffset>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
@@ -185,6 +264,8 @@ fn main() {
                 build_expression_maps,
                 apply_expressions,
                 apply_body_position,
+                tag_head_bone,
+                apply_head_position,
             ),
         )
         .run();
@@ -212,6 +293,7 @@ fn dump_tracker_frames(
     rx: Res<TrackerReceiver>,
     mut current_expressions: ResMut<CurrentExpressions>,
     mut shoulder_pos: ResMut<CurrentShoulderPosition>,
+    mut head_offset: ResMut<CurrentHeadOffset>,
 ) {
     let adapter = ArkitToVrmAdapter;
 
@@ -289,11 +371,26 @@ fn dump_tracker_frames(
             if left.visibility >= SHOULDER_VISIBILITY_THRESHOLD
                 && right.visibility >= SHOULDER_VISIBILITY_THRESHOLD
             {
-                shoulder_pos.midpoint = Some(Vec3::new(
+                let midpoint = Vec3::new(
                     (left.x + right.x) * 0.5,
                     (left.y + right.y) * 0.5,
                     (left.z + right.z) * 0.5,
-                ));
+                );
+                shoulder_pos.midpoint = Some(midpoint);
+
+                // Update head offset: nose world position relative to shoulder midpoint.
+                // The nose (index 0) is used as a proxy for the head's world-space centre.
+                if let Some(nose) = frame.pose_world_landmarks.get(NOSE_IDX) {
+                    if nose.visibility >= NOSE_VISIBILITY_THRESHOLD {
+                        let nose_world = Vec3::new(nose.x, nose.y, nose.z);
+                        let current = nose_world - midpoint;
+                        // Calibrate neutral position on the first valid frame.
+                        if head_offset.neutral.is_none() {
+                            head_offset.neutral = Some(current);
+                        }
+                        head_offset.current = Some(current);
+                    }
+                }
             }
         }
     }
@@ -617,5 +714,100 @@ fn apply_body_position(
             (midpoint.y + SHOULDER_Y_OFFSET) * BODY_Y_SIGN * BODY_Y_SCALE,
             midpoint.z * BODY_Z_SIGN * BODY_Z_SCALE,
         );
+    }
+}
+
+/// System that locates the VRM head bone entity and marks it with [`VrmHeadBone`].
+///
+/// Runs every frame but exits early once the bone has been tagged (tracked via
+/// the [`HeadBoneTagged`] marker on the VRM root entity).
+///
+/// The head bone is identified by:
+/// 1. Looking up the `"head"` entry in the VRM 1.0 humanoid bone map to get
+///    the glTF node index.
+/// 2. Fetching the corresponding [`bevy::gltf::GltfNode`] asset to obtain the
+///    node's string name.
+/// 3. Searching the spawned scene hierarchy for an entity whose [`Name`]
+///    matches that string.
+///
+/// The glTF node's rest-pose local translation is stored inside [`VrmHeadBone`]
+/// so that [`apply_head_position`] can add the tracking delta on top of it.
+#[allow(clippy::type_complexity)]
+fn tag_head_bone(
+    mut commands: Commands,
+    vrm_assets: Res<Assets<VrmAsset>>,
+    gltf_assets: Res<Assets<bevy::gltf::Gltf>>,
+    gltf_node_assets: Res<Assets<bevy::gltf::GltfNode>>,
+    vrm_entities: Query<(Entity, &VrmHandle), (With<CurrentVrmEntity>, Without<HeadBoneTagged>)>,
+    named_entities: Query<(Entity, &Name)>,
+) {
+    for (vrm_entity, vrm_handle) in vrm_entities.iter() {
+        let Some(vrm_asset) = vrm_assets.get(&vrm_handle.0) else {
+            continue;
+        };
+        let Some(gltf) = gltf_assets.get(&vrm_asset.gltf) else {
+            continue;
+        };
+        let Some(humanoid) = &vrm_asset.humanoid else {
+            continue;
+        };
+        let Some(head_bone_ref) = humanoid.human_bones.get("head") else {
+            continue;
+        };
+        let head_node_idx = head_bone_ref.node;
+        let Some(gltf_node_handle) = gltf.nodes.get(head_node_idx) else {
+            continue;
+        };
+        let Some(gltf_node) = gltf_node_assets.get(gltf_node_handle) else {
+            continue;
+        };
+
+        let head_node_name = gltf_node.name.clone();
+        let rest_translation = gltf_node.transform.translation;
+
+        // Find the scene entity whose Name matches the glTF node name.
+        if let Some((entity, _)) = named_entities
+            .iter()
+            .find(|(_, name)| name.as_str() == head_node_name.as_str())
+        {
+            commands
+                .entity(entity)
+                .insert(VrmHeadBone { rest_translation });
+            info!(
+                "Tagged VRM head bone '{}' (rest translation: {:?})",
+                head_node_name, rest_translation
+            );
+            // Prevent repeated searches on subsequent frames.
+            commands.entity(vrm_entity).insert(HeadBoneTagged);
+        }
+    }
+}
+
+/// System that translates the VRM head bone based on the head's world-space
+/// position relative to the shoulder midpoint.
+///
+/// The nose pose world landmark (MediaPipe index 0) is used as a proxy for the
+/// head's world-space position.  On the first valid frame the nose-to-shoulder
+/// offset is recorded as the neutral position; all subsequent frames apply the
+/// *delta* from that neutral as a local-space translation to the head bone.
+///
+/// This makes the avatar's head follow the subject's head movements
+/// independently of body/shoulder movement that is already handled by
+/// [`apply_body_position`].
+fn apply_head_position(
+    head_offset: Res<CurrentHeadOffset>,
+    mut head_bone_query: Query<(&VrmHeadBone, &mut Transform)>,
+) {
+    let Some(delta) = head_offset.delta() else {
+        return;
+    };
+
+    for (head_bone, mut transform) in head_bone_query.iter_mut() {
+        transform.translation = head_bone.rest_translation
+            + Vec3::new(
+                delta.x * HEAD_X_SIGN * HEAD_X_SCALE,
+                delta.y * HEAD_Y_SIGN * HEAD_Y_SCALE,
+                delta.z * HEAD_Z_SIGN * HEAD_Z_SCALE,
+            );
     }
 }
