@@ -437,7 +437,11 @@ fn load_vrm_from_path(
         let asset_path = format!("userdata://{}", file_name.to_string_lossy());
         println!("Loading VRM model from user data: {asset_path}");
         let vrm_handle: Handle<VrmAsset> = asset_server.load(&asset_path);
-        commands.spawn((VrmHandle(vrm_handle), CurrentVrmEntity, Transform::default()));
+        commands.spawn((
+            VrmHandle(vrm_handle),
+            CurrentVrmEntity,
+            Transform::default(),
+        ));
     }
 }
 
