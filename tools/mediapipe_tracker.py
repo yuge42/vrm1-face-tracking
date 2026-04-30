@@ -2,6 +2,7 @@ import json
 import time
 import sys
 import os
+import argparse
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -17,6 +18,16 @@ POSE_MODEL_PATH = "tools/pose_landmarker_full.task"
 MAX_FRAME_FAILURES = 30
 
 def main():
+    parser = argparse.ArgumentParser(description="MediaPipe face and pose tracker")
+    parser.add_argument(
+        "--camera",
+        type=int,
+        default=0,
+        help="Video device index to use (default: 0)",
+    )
+    args = parser.parse_args()
+    camera_device_id = args.camera
+
     # Check if face model file exists
     if not os.path.exists(FACE_MODEL_PATH):
         print(json.dumps({
@@ -52,10 +63,10 @@ def main():
     pose_landmarker = vision.PoseLandmarker.create_from_options(pose_options)
     
     # Open webcam
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(camera_device_id)
     if not cap.isOpened():
         print(json.dumps({
-            "error": "Failed to open webcam (device index 0). Please check that a webcam is connected and accessible."
+            "error": f"Failed to open webcam (device index {camera_device_id}). Please check that a webcam is connected and accessible."
         }), file=sys.stderr, flush=True)
         sys.exit(1)
     

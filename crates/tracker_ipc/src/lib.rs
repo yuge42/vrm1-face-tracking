@@ -39,9 +39,14 @@ pub struct TrackerFrame {
 }
 
 /// Run Python process and return a Receiver
-pub fn spawn_tracker(python: &str, script_path: &str) -> (Child, Receiver<TrackerFrame>) {
+pub fn spawn_tracker(
+    python: &str,
+    script_path: &str,
+    extra_args: &[&str],
+) -> (Child, Receiver<TrackerFrame>) {
     let mut child = Command::new(python)
         .arg(script_path)
+        .args(extra_args)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
