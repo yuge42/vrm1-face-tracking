@@ -113,7 +113,7 @@ const SHOULDER_Y_OFFSET: f32 = -0.4;
 /// Sign multiplier for left-right (X) body translation.
 /// 1.0  = natural (MediaPipe X is already "person's right", same as Bevy X)
 /// -1.0 = mirror / flip left↔right
-const BODY_X_SIGN: f32 = 1.0;
+const BODY_X_SIGN: f32 = -1.0;
 
 /// Scale factor for left-right (X) body translation.
 /// Increase above 1.0 to amplify horizontal movement; decrease toward 0.0 to dampen it.
@@ -131,7 +131,7 @@ const BODY_Y_SCALE: f32 = 1.0;
 /// Sign multiplier for forward-backward (Z) body translation.
 /// 1.0  = natural (toward-camera in MediaPipe = toward-viewer in Bevy)
 /// -1.0 = flip forward↔backward
-const BODY_Z_SIGN: f32 = 1.0;
+const BODY_Z_SIGN: f32 = -1.0;
 
 /// Scale factor for forward-backward (Z) body translation.
 /// Increase above 1.0 to amplify depth movement; decrease toward 0.0 to dampen it.
@@ -303,7 +303,7 @@ fn setup_scene(mut commands: Commands, config: Res<Config>) {
     // Spawn camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 1.3, 1.5).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, 0.8, 1.5).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
     ));
 
     // Spawn directional light
