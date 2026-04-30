@@ -99,6 +99,44 @@ const SHOULDER_VISIBILITY_THRESHOLD: f32 = 0.1;
 ///             = shoulder_world_y - 0.4
 const SHOULDER_Y_OFFSET: f32 = -0.4;
 
+// ---------------------------------------------------------------------------
+// Body movement direction / scale controls
+//
+// Each axis can be independently:
+//   • flipped  – change 1.0 → -1.0 to invert that direction
+//   • scaled   – multiply by a value other than 1.0 to amplify / dampen movement
+//
+// Defaults reproduce a 1-to-1 mapping from MediaPipe world coordinates to
+// Bevy world coordinates with no inversion.
+// ---------------------------------------------------------------------------
+
+/// Sign multiplier for left-right (X) body translation.
+/// 1.0  = natural (MediaPipe X is already "person's right", same as Bevy X)
+/// -1.0 = mirror / flip left↔right
+const BODY_X_SIGN: f32 = 1.0;
+
+/// Scale factor for left-right (X) body translation.
+/// Increase above 1.0 to amplify horizontal movement; decrease toward 0.0 to dampen it.
+const BODY_X_SCALE: f32 = 1.0;
+
+/// Sign multiplier for up-down (Y) body translation.
+/// 1.0  = natural (up in MediaPipe = up in Bevy)
+/// -1.0 = flip up↔down
+const BODY_Y_SIGN: f32 = 1.0;
+
+/// Scale factor for up-down (Y) body translation.
+/// Increase above 1.0 to amplify vertical movement; decrease toward 0.0 to dampen it.
+const BODY_Y_SCALE: f32 = 1.0;
+
+/// Sign multiplier for forward-backward (Z) body translation.
+/// 1.0  = natural (toward-camera in MediaPipe = toward-viewer in Bevy)
+/// -1.0 = flip forward↔backward
+const BODY_Z_SIGN: f32 = 1.0;
+
+/// Scale factor for forward-backward (Z) body translation.
+/// Increase above 1.0 to amplify depth movement; decrease toward 0.0 to dampen it.
+const BODY_Z_SCALE: f32 = 1.0;
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -554,7 +592,10 @@ fn apply_expressions(
 /// is used to compute where the model's root (feet) should be placed in Bevy
 /// world space, so that the model tracks the subject's real-world torso position.
 ///
-/// Coordinate mapping:
+/// Each axis is multiplied by its sign constant (`BODY_*_SIGN`) and scale constant
+/// (`BODY_*_SCALE`) so movement can be flipped or amplified by editing those values.
+///
+/// Coordinate mapping (with default signs/scales of ±1.0 / 1.0):
 /// - MediaPipe world X (person's right) → Bevy world X
 /// - MediaPipe world Y (up, origin at hip centre) → Bevy world Y with `SHOULDER_Y_OFFSET`
 /// - MediaPipe world Z (toward camera) → Bevy world Z
@@ -568,9 +609,9 @@ fn apply_body_position(
 
     for mut transform in vrm_query.iter_mut() {
         transform.translation = Vec3::new(
-            midpoint.x,
-            midpoint.y + SHOULDER_Y_OFFSET,
-            midpoint.z,
+            midpoint.x * BODY_X_SIGN * BODY_X_SCALE,
+            (midpoint.y + SHOULDER_Y_OFFSET) * BODY_Y_SIGN * BODY_Y_SCALE,
+            midpoint.z * BODY_Z_SIGN * BODY_Z_SCALE,
         );
     }
 }
