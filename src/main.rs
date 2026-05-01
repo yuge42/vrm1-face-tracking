@@ -55,6 +55,22 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+/// Resource that stores calibration data for the rest-pose baseline.
+///
+/// When calibration is captured, the current raw blendshape values are stored as
+/// the baseline.  During tracking, the baseline is subtracted from each incoming
+/// value so that structural differences between the face detector and the VRM
+/// model at rest are absorbed and the model sits in its natural neutral pose.
+#[derive(Resource, Default)]
+struct CalibrationData {
+    /// Per-blendshape rest-pose values captured at calibration time.
+    /// An empty map means no calibration has been applied yet.
+    baseline: HashMap<String, f32>,
+    /// When `true`, the next received tracker frame will be captured as the
+    /// new calibration baseline.
+    pending_capture: bool,
+}
+
 /// Resource that stores the body position derived from shoulder world landmarks.
 ///
 /// The midpoint of the two shoulder world landmarks is used to translate the
@@ -173,6 +189,7 @@ fn main() {
         .init_resource::<VrmModelPath>()
         .init_resource::<CurrentExpressions>()
         .init_resource::<CurrentShoulderPosition>()
+        .init_resource::<CalibrationData>()
         .add_systems(Startup, (setup_tracker, setup_scene, setup_file_dialog))
         .add_systems(
             Update,
@@ -180,6 +197,7 @@ fn main() {
                 dump_tracker_frames,
                 check_vrm_load_status,
                 handle_file_dialog_input,
+                handle_calibration_input,
                 receive_file_dialog_result,
                 load_vrm_from_path,
                 build_expression_maps,
@@ -212,12 +230,38 @@ fn dump_tracker_frames(
     rx: Res<TrackerReceiver>,
     mut current_expressions: ResMut<CurrentExpressions>,
     mut shoulder_pos: ResMut<CurrentShoulderPosition>,
+    mut calibration: ResMut<CalibrationData>,
 ) {
     let adapter = ArkitToVrmAdapter;
 
     while let Ok(frame) = rx.rx.try_recv() {
-        // Use the expression adapter to convert ARKit blendshapes to VRM expressions
-        let vrm_expressions = adapter.to_vrm_expressions(&frame.blendshapes);
+        // Capture calibration baseline if a capture was requested.
+        if calibration.pending_capture {
+            calibration.baseline = frame.blendshapes.clone();
+            calibration.pending_capture = false;
+            println!(
+                "✓ Calibration captured ({} blendshapes in baseline)",
+                calibration.baseline.len()
+            );
+        }
+
+        // Apply calibration: subtract the rest-pose baseline from each raw
+        // blendshape value and clamp to [0, 1].  This absorbs any structural
+        // bias between the face detector and the VRM model at rest.
+        // When no calibration has been captured yet (baseline is empty) every
+        // `get` call returns the default of 0.0, so the raw values are passed
+        // through unchanged – which is the correct uncalibrated behaviour.
+        let calibrated_blendshapes: HashMap<String, f32> = frame
+            .blendshapes
+            .iter()
+            .map(|(k, &v)| {
+                let base = calibration.baseline.get(k).copied().unwrap_or(0.0);
+                (k.clone(), (v - base).clamp(0.0, 1.0))
+            })
+            .collect();
+
+        // Use the expression adapter to convert calibrated ARKit blendshapes to VRM expressions
+        let vrm_expressions = adapter.to_vrm_expressions(&calibrated_blendshapes);
 
         // Store expressions for the apply_expressions system to use
         current_expressions.expressions = vrm_expressions.clone();
@@ -321,6 +365,7 @@ fn setup_scene(mut commands: Commands, config: Res<Config>) {
         config.inner.user_vrm_dir.display()
     );
     println!("Press 'O' to open a file dialog and select a VRM model to load.");
+    println!("Press 'C' to capture the current pose as the calibration baseline.");
 }
 
 fn check_vrm_load_status(
@@ -399,12 +444,28 @@ fn receive_file_dialog_result(
     }
 }
 
+/// System that handles the calibration key press ('C').
+///
+/// When the user presses 'C', the next tracker frame will be stored as the
+/// rest-pose calibration baseline.  This zeroes out any structural bias in the
+/// face detector so the VRM model sits in its natural neutral state.
+fn handle_calibration_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut calibration: ResMut<CalibrationData>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyC) {
+        calibration.pending_capture = true;
+        println!("Calibration requested – capturing rest pose on next tracker frame…");
+    }
+}
+
 fn load_vrm_from_path(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut vrm_path: ResMut<VrmModelPath>,
     current_vrm_query: Query<Entity, With<CurrentVrmEntity>>,
     config: Res<Config>,
+    mut calibration: ResMut<CalibrationData>,
 ) {
     if let Some(path) = vrm_path.path.take() {
         // Remove the current VRM entity if it exists
@@ -442,6 +503,12 @@ fn load_vrm_from_path(
             CurrentVrmEntity,
             Transform::default(),
         ));
+
+        // Auto-capture calibration baseline when a model is loaded so the
+        // model immediately sits in its natural neutral pose.  The user is
+        // expected to hold a relaxed, neutral expression at this point.
+        calibration.pending_capture = true;
+        println!("Calibration will be captured on next tracker frame (triggered by model load).");
     }
 }
 
