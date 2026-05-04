@@ -55,12 +55,19 @@ struct CurrentExpressions {
     expressions: Vec<VrmExpression>,
 }
 
+/// Marker component attached to the primary 3D camera so systems can locate it.
+#[derive(Component)]
+struct MainCamera;
+
 /// Resource that stores calibration data for the rest-pose baseline.
 ///
 /// When calibration is captured, the current raw blendshape values are stored as
 /// the baseline.  During tracking, the baseline is subtracted from each incoming
 /// value so that structural differences between the face detector and the VRM
 /// model at rest are absorbed and the model sits in its natural neutral pose.
+///
+/// The `reset_camera` flag is set at the same time so that `reset_camera_view`
+/// can reframe the view to show the model from chest up to above the head.
 #[derive(Resource, Default)]
 struct CalibrationData {
     /// Per-blendshape rest-pose values captured at calibration time.
@@ -69,6 +76,9 @@ struct CalibrationData {
     /// When `true`, the next received tracker frame will be captured as the
     /// new calibration baseline.
     pending_capture: bool,
+    /// When `true`, `reset_camera_view` will reposition the camera to frame
+    /// the model from chest up to above the head.
+    reset_camera: bool,
 }
 
 /// Resource that stores the body position derived from shoulder world landmarks.
@@ -153,6 +163,20 @@ const BODY_Z_SIGN: f32 = -1.0;
 /// Increase above 1.0 to amplify depth movement; decrease toward 0.0 to dampen it.
 const BODY_Z_SCALE: f32 = 1.0;
 
+// ---------------------------------------------------------------------------
+// Camera reset / framing constants
+// ---------------------------------------------------------------------------
+
+/// Height (meters above VRM root) of the look-at target used when the camera
+/// is reset.  Shoulder height for a typical VRM model is ~1.4 m; using 1.5 m
+/// centres the frame between the shoulders and top of head.
+const CAMERA_TARGET_Y_ABOVE_ROOT: f32 = 1.5;
+
+/// Distance (meters) from the model root to place the camera when resetting.
+/// At Bevy's default 60° vertical FOV this shows roughly 1.15 m of height,
+/// framing the upper body from ~chest level to above the head.
+const CAMERA_RESET_DISTANCE: f32 = 1.0;
+
 fn main() {
     // Load or create configuration
     let config = AppConfig::load_or_create().expect("Failed to load configuration");
@@ -198,6 +222,7 @@ fn main() {
                 check_vrm_load_status,
                 handle_file_dialog_input,
                 handle_calibration_input,
+                reset_camera_view,
                 receive_file_dialog_result,
                 load_vrm_from_path,
                 build_expression_maps,
@@ -344,10 +369,12 @@ fn dump_tracker_frames(
 }
 
 fn setup_scene(mut commands: Commands, config: Res<Config>) {
-    // Spawn camera
+    // Spawn camera and tag it with MainCamera so reset_camera_view can find it
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 0.8, 1.5).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, CAMERA_TARGET_Y_ABOVE_ROOT, CAMERA_RESET_DISTANCE)
+            .looking_at(Vec3::new(0.0, CAMERA_TARGET_Y_ABOVE_ROOT, 0.0), Vec3::Y),
+        MainCamera,
     ));
 
     // Spawn directional light
@@ -455,8 +482,56 @@ fn handle_calibration_input(
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyC) {
         calibration.pending_capture = true;
+        calibration.reset_camera = true;
         println!("Calibration requested – capturing rest pose on next tracker frame…");
     }
+}
+
+/// System that resets the camera framing when calibration is triggered.
+///
+/// Positions the camera so the model is visible from the chest up to just above
+/// the head.  The position is computed from the current shoulder world landmarks
+/// so the camera follows the model to wherever it is in world space at the time
+/// of the reset.  If no body tracking data is available yet, the origin is used
+/// as the model root fallback.
+fn reset_camera_view(
+    mut calibration: ResMut<CalibrationData>,
+    shoulder_pos: Res<CurrentShoulderPosition>,
+    mut camera_query: Query<&mut Transform, With<MainCamera>>,
+) {
+    if !calibration.reset_camera {
+        return;
+    }
+    calibration.reset_camera = false;
+
+    // Re-derive the VRM root position the same way apply_body_position does.
+    let root = if let Some(midpoint) = shoulder_pos.midpoint {
+        Vec3::new(
+            midpoint.x * BODY_X_SIGN * BODY_X_SCALE,
+            (midpoint.y + SHOULDER_Y_OFFSET) * BODY_Y_SIGN * BODY_Y_SCALE,
+            midpoint.z * BODY_Z_SIGN * BODY_Z_SCALE,
+        )
+    } else {
+        Vec3::ZERO
+    };
+
+    // Target: upper-body centre (chest to head range) above the model root.
+    // Position: directly in front (positive Z) at CAMERA_RESET_DISTANCE.
+    let target = Vec3::new(root.x, root.y + CAMERA_TARGET_Y_ABOVE_ROOT, root.z);
+    let cam_pos = Vec3::new(
+        root.x,
+        root.y + CAMERA_TARGET_Y_ABOVE_ROOT,
+        root.z + CAMERA_RESET_DISTANCE,
+    );
+
+    for mut transform in camera_query.iter_mut() {
+        *transform = Transform::from_translation(cam_pos).looking_at(target, Vec3::Y);
+    }
+
+    println!(
+        "✓ Camera reset – position=({:.2},{:.2},{:.2}), target=({:.2},{:.2},{:.2})",
+        cam_pos.x, cam_pos.y, cam_pos.z, target.x, target.y, target.z
+    );
 }
 
 fn load_vrm_from_path(
@@ -507,7 +582,9 @@ fn load_vrm_from_path(
         // Auto-capture calibration baseline when a model is loaded so the
         // model immediately sits in its natural neutral pose.  The user is
         // expected to hold a relaxed, neutral expression at this point.
+        // Also reset the camera so the model is properly framed.
         calibration.pending_capture = true;
+        calibration.reset_camera = true;
         println!("Calibration will be captured on next tracker frame (triggered by model load).");
     }
 }
