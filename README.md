@@ -85,6 +85,17 @@ You can load VRM models in two ways:
 
 When you select a file via the file dialog, it will be copied to your user data directory and loaded using Bevy's custom asset source, replacing the current model. The file dialog runs in a separate thread to keep the application responsive.
 
+### Calibration
+
+The application includes a **rest-pose calibration** system that compensates for structural differences between the face detector's output and the VRM model at rest.
+
+When calibration is captured, the current raw blendshape values are stored as the neutral baseline.  From that point on, each incoming blendshape value has its baseline subtracted before being converted to VRM expressions, so the model sits in its natural neutral state even if the face detector reports non-zero values at rest.
+
+Calibration is triggered in two ways:
+
+- **Automatic**: Calibration is captured automatically each time you load a new VRM model.  Make sure your face is in a relaxed, neutral expression at the moment of loading.
+- **Manual**: Press the `C` key at any time to re-capture the calibration baseline.  This is useful when you want to re-calibrate without reloading the model.
+
 ### Configuration
 
 The application configuration is stored in `config.toml` in your platform-specific config directory. The configuration includes:
